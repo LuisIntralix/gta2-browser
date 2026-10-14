@@ -1,0 +1,487 @@
+From cfcbc106c12de76992a054eee94aeac48ca57abc Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:11:11 +1100
+Subject: [PATCH 02/23] port: const reference parameters for temporaries
+ (scripts/port/constify_temporaries.py)
+
+---
+ Source/CarPhysics_B0.cpp |  6 +++---
+ Source/CarPhysics_B0.hpp |  6 +++---
+ Source/Cranes.cpp        |  2 +-
+ Source/Cranes.hpp        |  2 +-
+ Source/Fix16_Point.cpp   |  4 ++--
+ Source/Fix16_Point.hpp   | 12 ++++++------
+ Source/MapRenderer.cpp   | 22 +++++++++++-----------
+ Source/MapRenderer.hpp   |  6 +++---
+ Source/Object_5C.cpp     |  2 +-
+ Source/Object_5C.hpp     |  2 +-
+ Source/Weapon_30.cpp     |  2 +-
+ Source/Weapon_30.hpp     |  2 +-
+ Source/ang16.cpp         |  4 ++--
+ Source/ang16.hpp         |  6 +++---
+ Source/char.hpp          |  2 +-
+ Source/fix16.cpp         |  4 ++--
+ Source/fix16.hpp         | 12 ++++++------
+ 17 files changed, 48 insertions(+), 48 deletions(-)
+
+diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
+index 618e08b..dbaf245 100644
+--- a/Source/CarPhysics_B0.cpp
++++ b/Source/CarPhysics_B0.cpp
+@@ -2372,7 +2372,7 @@ void CarPhysics_B0::ApplyAngularImpulse_55F970(Fix16 a2)
+ }
+ 
+ MATCH_FUNC(0x55f9a0)
+-void CarPhysics_B0::ApplyForceScaledByMass_55F9A0(Fix16_Point& pForce)
++void CarPhysics_B0::ApplyForceScaledByMass_55F9A0(const Fix16_Point& pForce)
+ {
+     field_48_force_accum += pForce.Multiply_438FE0(CarPhysics_B0::CalculateMass_559FF0());
+ }
+@@ -2396,7 +2396,7 @@ void CarPhysics_B0::ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* a2)
+ 
+ // https://decomp.me/scratch/TSKLx
+ MATCH_FUNC(0x55fa60)
+-Fix16 CarPhysics_B0::ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, Fix16_Point& Impulse, s32 base_dmg)
++Fix16 CarPhysics_B0::ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, const Fix16_Point& Impulse, s32 base_dmg)
+ {
+     Fix16_Point NewImpulse;
+     Fix16 ImpulseIntensity = GetLength_AbsOutOfLine_41E260(Impulse);
+@@ -2451,7 +2451,7 @@ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value)
+ }
+ 
+ MATCH_FUNC(0x55fc30)
+-void CarPhysics_B0::AccumulateImpulse_55FC30(Fix16_Point& arg0, s32 base_dmg)
++void CarPhysics_B0::AccumulateImpulse_55FC30(const Fix16_Point& arg0, s32 base_dmg)
+ {
+ 
+     Fix16_Point a2;
+diff --git a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
+index 42105c9..19d2b02 100644
+--- a/Source/CarPhysics_B0.hpp
++++ b/Source/CarPhysics_B0.hpp
+@@ -200,10 +200,10 @@ class CarPhysics_B0
+     EXPORT void ApplyForceAtPoint_55F800(Fix16_Point* a2, Fix16_Point* a3, s32 a4);
+     EXPORT void AccumulateImpulse_55F930(Fix16_Point* a2);
+     EXPORT void ApplyAngularImpulse_55F970(Fix16 a2);
+-    EXPORT void ApplyForceScaledByMass_55F9A0(Fix16_Point& pForce);
++    EXPORT void ApplyForceScaledByMass_55F9A0(const Fix16_Point& pForce);
+     EXPORT void ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* a2);
+-    EXPORT Fix16 ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, Fix16_Point& Impulse, s32 base_dmg);
+-    EXPORT void AccumulateImpulse_55FC30(Fix16_Point& a2, s32 a3);
++    EXPORT Fix16 ApplyImpactForcesAndDamage_55FA60(Fix16_Point& PointOfForce, const Fix16_Point& Impulse, s32 base_dmg);
++    EXPORT void AccumulateImpulse_55FC30(const Fix16_Point& a2, s32 a3);
+     EXPORT void HandleWorldCollision_55FD00(Fix16_Point& pHitPoint);
+     EXPORT void HandleCarCollision_55FF20(Car_BC* pOtherCar);
+     EXPORT void HandleObjectCollision_5606C0(Object_2C* a2, char_type a3);
+diff --git a/Source/Cranes.cpp b/Source/Cranes.cpp
+index a7a003c..6af5a9b 100644
+--- a/Source/Cranes.cpp
++++ b/Source/Cranes.cpp
+@@ -509,7 +509,7 @@ void Crane_15C::UpdateCraneTargets_47F4C0()
+ 
+ // 9.6f 0x448900
+ MATCH_FUNC(0x47f6c0)
+-bool Crane_15C::ComputeHookPolar_47F6C0(Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
++bool Crane_15C::ComputeHookPolar_47F6C0(const Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng)
+ {
+     Fix16_Point v10 = (pPoint.Sub_40AC80(field_2C_rotor_obj->field_4->get_x_y()));
+     *pOutF16 = v10.GetLength_41E260();
+diff --git a/Source/Cranes.hpp b/Source/Cranes.hpp
+index a01327a..7e31a09 100644
+--- a/Source/Cranes.hpp
++++ b/Source/Cranes.hpp
+@@ -43,7 +43,7 @@ class Crane_15C
+     EXPORT bool IsPickupCarTargetValid_47F3D0();
+     EXPORT bool IsDropTransporterTargetValid_47F450();
+     EXPORT void UpdateCraneTargets_47F4C0();
+-    EXPORT bool ComputeHookPolar_47F6C0(Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng);
++    EXPORT bool ComputeHookPolar_47F6C0(const Fix16_Point& pPoint, Fix16* pOutF16, Fix16* pOutAng);
+     EXPORT void TargetTransporter_47F7F0(Car_BC* a2);
+     EXPORT void PickUpCar_47F930(Car_BC* a2);
+     EXPORT void TryNextDropPosition_47FB40();
+diff --git a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
+index 41da2e5..371bbc6 100644
+--- a/Source/Fix16_Point.cpp
++++ b/Source/Fix16_Point.cpp
+@@ -29,7 +29,7 @@ Ang16 Fix16_Point::atan2_40ACD0()
+ 
+ // https://decomp.me/scratch/qQwG3
+ MATCH_FUNC(0x438FE0)
+-Fix16_Point Fix16_Point::Multiply_438FE0(Fix16& in)
++Fix16_Point Fix16_Point::Multiply_438FE0(const Fix16& in)
+ {
+     return Fix16_Point(x * in, y * in);
+ }
+@@ -63,7 +63,7 @@ Fix16_Point Fix16_Point::MultBy_442C80(const s32& factor)
+ 
+ // https://decomp.me/scratch/nFSYS
+ MATCH_FUNC(0x442CB0)
+-Fix16_Point Fix16_Point::Divide_442CB0(Fix16& in)
++Fix16_Point Fix16_Point::Divide_442CB0(const Fix16& in)
+ {
+     return Fix16_Point(x / in, y / in);
+ }
+diff --git a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
+index c010fb9..7644e44 100644
+--- a/Source/Fix16_Point.hpp
++++ b/Source/Fix16_Point.hpp
+@@ -44,13 +44,13 @@ struct Fix16_Point_POD
+         y = a2;
+     }
+ 
+-    void SetXY_432860(Fix16& a2, Fix16& a3)
++    void SetXY_432860(const Fix16& a2, const Fix16& a3)
+     {
+         this->x = a2;
+         this->y = a3;
+     }
+ 
+-    inline void SetFromPolar_41E210(Fix16& radius, Ang16& angle)
++    inline void SetFromPolar_41E210(const Fix16& radius, Ang16& angle)
+     {
+         x = Ang16::sine_40F500(angle) * radius;
+         y = Ang16::cosine_40F520(angle) * radius;
+@@ -83,7 +83,7 @@ struct Fix16_Point_POD
+ class Fix16_Point
+ {
+   public:
+-    void SetXY_432860(Fix16& a2, Fix16& a3)
++    void SetXY_432860(const Fix16& a2, const Fix16& a3)
+     {
+         this->x = a2;
+         this->y = a3;
+@@ -166,7 +166,7 @@ class Fix16_Point
+         }
+     }
+ 
+-    inline void SetFromPolar_41E210(Fix16& radius, Ang16& angle)
++    inline void SetFromPolar_41E210(const Fix16& radius, Ang16& angle)
+     {
+         x = Ang16::sine_40F500(angle) * radius;
+         y = Ang16::cosine_40F520(angle) * radius;
+@@ -279,8 +279,8 @@ class Fix16_Point
+     // Out-of-line copy of RotateByAngle_40F6B0, emitted in CarPhysics_B0.cpp
+     EXPORT void RotateVelocity_562C20(const Ang16& angle);
+ 
+-    EXPORT Fix16_Point Multiply_438FE0(Fix16& a1);
+-    EXPORT Fix16_Point Divide_442CB0(Fix16& a1);
++    EXPORT Fix16_Point Multiply_438FE0(const Fix16& a1);
++    EXPORT Fix16_Point Divide_442CB0(const Fix16& a1);
+ 
+     // Divide_442CB0 as a nothrow inline (see DivideInl_55F9E0; CarPhysics_B0::HandleObjectCollision_5606C0,
+     // Car_BC::ApplyExplosionImpulse_443710)
+diff --git a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
+index a73a45f..40f965c 100644
+--- a/Source/MapRenderer.cpp
++++ b/Source/MapRenderer.cpp
+@@ -114,7 +114,7 @@ static inline f32 Fix16ToF32_P3(const Fix16& v)
+ 
+ struct VertProjector
+ {
+-    inline void ProjectVertTop_46BD40(Fix16& x, Fix16& y, Vert* pVert)
++    inline void ProjectVertTop_46BD40(const Fix16& x, const Fix16& y, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(x, y, gZCoordTop_6F62B0, pVert);
+         pVert->x = x.ToFloat() * gScreenScaleTop_6F628C.ToFloat() + (u32)gViewCamera_676978->field_70_screen_px_center_x;
+@@ -122,7 +122,7 @@ struct VertProjector
+         pVert->z = gInvDepthTop_6F656C.ToFloat();
+     }
+ 
+-    inline void ProjectVertBottom_46BDF0(Fix16& xpos, Fix16& ypos, Vert* pVert)
++    inline void ProjectVertBottom_46BDF0(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoord_6F63E0, pVert);
+     
+@@ -131,7 +131,7 @@ struct VertProjector
+         pVert->z = gInvDepthBottom_6F6318.ToFloat();
+     }
+ 
+-    inline void ProjectVert_46BC70(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
++    inline void ProjectVert_46BC70(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
+         pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
+@@ -155,7 +155,7 @@ static VertProjector gVertProjector;
+ // exactly 0 left (DrawLeftSide_4EA390's last operator+), so a bigger helper sends calls out of line.
+ struct VertProjector2
+ {
+-    inline void ProjectVertTop_46BD40(Fix16& x, Fix16& y, Vert* pVert)
++    inline void ProjectVertTop_46BD40(const Fix16& x, const Fix16& y, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(x, y, gZCoordTop_6F62B0, pVert);
+         pVert->x = (((x.ToFloat())) * gScreenScaleTop_6F628C.ToFloat()) + (u32)gViewCamera_676978->field_70_screen_px_center_x;
+@@ -163,7 +163,7 @@ struct VertProjector2
+         pVert->z = gInvDepthTop_6F656C.ToFloat();
+     }
+ 
+-    inline void ProjectVertBottom_46BDF0(Fix16& xpos, Fix16& ypos, Vert* pVert)
++    inline void ProjectVertBottom_46BDF0(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoord_6F63E0, pVert);
+ 
+@@ -172,7 +172,7 @@ struct VertProjector2
+         pVert->z = gInvDepthBottom_6F6318.ToFloat();
+     }
+ 
+-    inline void ProjectVert_46BC70(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
++    inline void ProjectVert_46BC70(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
+         pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
+@@ -186,7 +186,7 @@ static VertProjector2 gVertProjector2;
+ // DrawGradientSlopeSouthwards_4F1660 and Eastwards_4F33B0 load field_60 before x/y (see above).
+ struct VertProjector3
+ {
+-    inline void ProjectVert_46BC70(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
++    inline void ProjectVert_46BC70(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
+         pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
+@@ -211,7 +211,7 @@ static inline f32 Fix16ToF32_Stored(const Fix16& v)
+ // field_60 fmuls behind that idiv, as in the original.
+ struct VertProjector4
+ {
+-    inline void ProjectVert_46BC70(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
++    inline void ProjectVert_46BC70(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
+     {
+         set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, zpos, pVert);
+         pVert->z = 1.0f / (gViewCamera_676978->field_98_cam_pos2.field_8_z.ToFloat() + (8.0f - zpos.ToFloat()));
+@@ -731,7 +731,7 @@ void __stdcall set_vert_xyz_relative_to_cam_4EAD90(Fix16 xCoord, Fix16 yCoord, F
+ 
+ // This function matches, but the offsets of gScreenScaleTop_6F628C and gInvDepthTop_6F656C are wrong
+ MATCH_FUNC(0x4eae00)
+-void MapRenderer::ProjectVertTop_4EAE00(Fix16& xpos, Fix16& ypos, Vert* pVert)
++void MapRenderer::ProjectVertTop_4EAE00(const Fix16& xpos, const Fix16& ypos, Vert* pVert)
+ {
+     set_vert_xyz_relative_to_cam_4EAD90(xpos, ypos, gZCoordTop_6F62B0, pVert);
+     
+@@ -741,7 +741,7 @@ void MapRenderer::ProjectVertTop_4EAE00(Fix16& xpos, Fix16& ypos, Vert* pVert)
+ }
+ 
+ MATCH_FUNC(0x4eaea0)
+-void MapRenderer::ProjectVertBottom_4EAEA0(Fix16& xCoord, Fix16& yCoord, Vert* pVert)
++void MapRenderer::ProjectVertBottom_4EAEA0(const Fix16& xCoord, const Fix16& yCoord, Vert* pVert)
+ {
+     set_vert_xyz_relative_to_cam_4EAD90(xCoord, yCoord, gZCoord_6F63E0, pVert);
+ 
+@@ -904,7 +904,7 @@ void MapRenderer::DrawRightSide_4EAF40(u16& right_word)
+ 
+ // https://decomp.me/scratch/GkGnQ
+ MATCH_FUNC(0x4EB940)
+-void MapRenderer::ProjectVert_4EB940(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert)
++void MapRenderer::ProjectVert_4EB940(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert)
+ {
+     set_vert_xyz_relative_to_cam_inlined(xpos, ypos, zpos, pVert);
+ 
+diff --git a/Source/MapRenderer.hpp b/Source/MapRenderer.hpp
+index 1aeda88..1652925 100644
+--- a/Source/MapRenderer.hpp
++++ b/Source/MapRenderer.hpp
+@@ -52,10 +52,10 @@ class MapRenderer
+     EXPORT void ambient_light_tick_4E9EA0();
+     EXPORT void draw_4EA190(u16& rotation_and_flip);
+     EXPORT void DrawLeftSide_4EA390(u16& left_word);
+-    EXPORT void ProjectVertTop_4EAE00(Fix16& xpos, Fix16& ypos, Vert* pVert);
+-    EXPORT void ProjectVertBottom_4EAEA0(Fix16& xCoord, Fix16& yCoord, Vert* pVert);
++    EXPORT void ProjectVertTop_4EAE00(const Fix16& xpos, const Fix16& ypos, Vert* pVert);
++    EXPORT void ProjectVertBottom_4EAEA0(const Fix16& xCoord, const Fix16& yCoord, Vert* pVert);
+     EXPORT void DrawRightSide_4EAF40(u16& right_word);
+-    EXPORT void ProjectVert_4EB940(Fix16& xpos, Fix16& ypos, Fix16& zpos, Vert* pVert);
++    EXPORT void ProjectVert_4EB940(const Fix16& xpos, const Fix16& ypos, const Fix16& zpos, Vert* pVert);
+     EXPORT void DrawTopSide_4EBA60(u16& top_word);
+     EXPORT void DrawDiagonalUpLeftFace_4EC450(u16& left_word);
+     EXPORT void DrawDiagonalUpRightFace_4EC7A0(u16& right_word);
+diff --git a/Source/Object_5C.cpp b/Source/Object_5C.cpp
+index a13aff0..4307c2a 100644
+--- a/Source/Object_5C.cpp
++++ b/Source/Object_5C.cpp
+@@ -359,7 +359,7 @@ void Object_2C::SetMovementVector_5224E0(Fix16_Point& speed)
+ }
+ 
+ MATCH_FUNC(0x522640)
+-void Object_2C::SetMovementVectorWithRandomState_522640(Fix16_Point& a2)
++void Object_2C::SetMovementVectorWithRandomState_522640(const Fix16_Point& a2)
+ {
+     SetMovementVector_5224E0(a2);
+ 
+diff --git a/Source/Object_5C.hpp b/Source/Object_5C.hpp
+index a764cad..ccf9d48 100644
+--- a/Source/Object_5C.hpp
++++ b/Source/Object_5C.hpp
+@@ -46,7 +46,7 @@ class Object_2C
+     EXPORT bool ShouldCollideWithSprite_522430(Sprite* a2);
+     EXPORT char_type SelectCollisionSprite_522460(Sprite* a2);
+     EXPORT void SetMovementVector_5224E0(Fix16_Point& speed);
+-    EXPORT void SetMovementVectorWithRandomState_522640(Fix16_Point& a2);
++    EXPORT void SetMovementVectorWithRandomState_522640(const Fix16_Point& a2);
+     EXPORT void SetConveyorPush_5226A0(char_type conveyor_speed);
+     EXPORT void ResolveCollisionWithObject_522710(Object_2C* a2, Fix16_Point* a3);
+     EXPORT void ResolveCollisionWithPed_5229B0(Char_B4* a2, Fix16_Point* a3, u8 a4);
+diff --git a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
+index b472010..f1e1bfd 100644
+--- a/Source/Weapon_30.cpp
++++ b/Source/Weapon_30.cpp
+@@ -227,7 +227,7 @@ void Weapon_30::TickReloadSpeed_5DCF40()
+ 
+ // 9.6f 0x4CDA90
+ MATCH_FUNC(0x5dcf60)
+-Object_2C* Weapon_30::spawn_bullet_5DCF60(s32 bullet_type, Fix16 xpos, Fix16 ypos, Fix16 zpos, Ang16 rot, Fix16_Point& speed)
++Object_2C* Weapon_30::spawn_bullet_5DCF60(s32 bullet_type, Fix16 xpos, Fix16 ypos, Fix16 zpos, Ang16 rot, const Fix16_Point& speed)
+ {
+     // probe_x/probe_y are assigned, not initialised: initialised, VC6 folds them into the call
+     // arguments and computes y first
+diff --git a/Source/Weapon_30.hpp b/Source/Weapon_30.hpp
+index dc5a8e7..827f21b 100644
+--- a/Source/Weapon_30.hpp
++++ b/Source/Weapon_30.hpp
+@@ -57,7 +57,7 @@ class Weapon_30
+     EXPORT bool is_max_capacity_5DCEA0();
+     EXPORT bool sub_5DCEF0();
+     EXPORT void TickReloadSpeed_5DCF40();
+-    EXPORT Object_2C* spawn_bullet_5DCF60(s32 bullet_type, Fix16 x, Fix16 y, Fix16 z, Ang16 rot, Fix16_Point& speed);
++    EXPORT Object_2C* spawn_bullet_5DCF60(s32 bullet_type, Fix16 x, Fix16 y, Fix16 z, Ang16 rot, const Fix16_Point& speed);
+     EXPORT void flamethrower_5DD0F0();
+     EXPORT void shotgun_5DD290();
+     EXPORT void pistol_5DD860();
+diff --git a/Source/ang16.cpp b/Source/ang16.cpp
+index 8b38640..cb454ee 100644
+--- a/Source/ang16.cpp
++++ b/Source/ang16.cpp
+@@ -92,7 +92,7 @@ Ang16::Ang16(Fix16* a2, s32 a3)
+ 
+ // TODO: move
+ MATCH_FUNC(0x451730)
+-void __stdcall Ang16::PolarToCartesian_451730(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
++void __stdcall Ang16::PolarToCartesian_451730(Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
+ {
+     ret1 = radius * Ang16::sine_40F500(angle);
+     ret2 = radius * Ang16::cosine_40F520(angle);
+@@ -105,7 +105,7 @@ Ang16 Ang16::Fix16_To_Ang16_482740(Fix16& a2)
+ }
+ 
+ MATCH_FUNC(0x4F78F0)
+-s32 __stdcall Ang16::GetAngleFace_4F78F0(Ang16& a1)
++s32 __stdcall Ang16::GetAngleFace_4F78F0(const Ang16& a1)
+ {
+     if (a1 <= kAng45_6F677C || a1 > kAng315_6F680C) //  45° and 315°
+     {
+diff --git a/Source/ang16.hpp b/Source/ang16.hpp
+index c8da470..10ae68e 100644
+--- a/Source/ang16.hpp
++++ b/Source/ang16.hpp
+@@ -250,16 +250,16 @@ class Ang16
+     }
+ 
+     // 9.6f 0x41FC20: the table value is the left operand (this) of the multiply
+-    inline static void __stdcall PolarToCartesian_41FC20(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
++    inline static void __stdcall PolarToCartesian_41FC20(const Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2)
+     {
+         ret1 = Ang16::sine_40F500(angle) * radius;
+         ret2 = Ang16::cosine_40F520(angle) * radius;
+     }
+ 
+     // Non-inlined version of above function
+-    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2);
++    EXPORT static void __stdcall PolarToCartesian_451730(Ang16& angle, const Fix16& radius, Fix16& ret1, Fix16& ret2);
+ 
+-    EXPORT static s32 __stdcall Ang16::GetAngleFace_4F78F0(Ang16& a1);
++    EXPORT static s32 __stdcall Ang16::GetAngleFace_4F78F0(const Ang16& a1);
+ 
+     // inlined from 0x40f580 on v9.6f
+     // I was tempted to put this on the Fix16 header, but that will create a circular dependency...
+diff --git a/Source/char.hpp b/Source/char.hpp
+index 04749c3..60da66b 100644
+--- a/Source/char.hpp
++++ b/Source/char.hpp
+@@ -208,7 +208,7 @@ class Char_B4
+     }
+ 
+     // strange, the same 9.6f func but Ped::ChaseTargetStateMachine_46B170 only matches if it pass by ref
+-    inline void RegulateVelocityByRef_433970(Fix16& threshold)
++    inline void RegulateVelocityByRef_433970(const Fix16& threshold)
+     {
+         if (field_38_velocity < threshold)
+         {
+diff --git a/Source/fix16.cpp b/Source/fix16.cpp
+index 6de783e..0737812 100644
+--- a/Source/fix16.cpp
++++ b/Source/fix16.cpp
+@@ -91,7 +91,7 @@ Fix16 Fix16::Negate_4086A0() const throw()
+ }
+ 
+ MATCH_FUNC(0x44E540)
+-Fix16 __stdcall Fix16::Max_44E540(Fix16& pLhs, Fix16& pRhs)
++Fix16 __stdcall Fix16::Max_44E540(const Fix16& pLhs, const Fix16& pRhs)
+ {
+     Fix16 result;
+     if (pLhs.mValue > pRhs.mValue)
+@@ -136,7 +136,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input) throw()
+ // 10.5 https://decomp.me/scratch/7a41K
+ // 9.6f https://decomp.me/scratch/ZkUbq
+ MATCH_FUNC(0x405320)
+-Ang16 __stdcall Fix16::atan2_fixed_405320(Fix16& x, Fix16& y)
++Ang16 __stdcall Fix16::atan2_fixed_405320(const Fix16& x, const Fix16& y)
+ {
+     Ang16 v9;
+     if (y == kFPZero_6691B0)
+diff --git a/Source/fix16.hpp b/Source/fix16.hpp
+index 9473d59..4e7d541 100644
+--- a/Source/fix16.hpp
++++ b/Source/fix16.hpp
+@@ -20,7 +20,7 @@ class Fix16
+ {
+   public:
+     // 9.6f func
+-    static inline s32 __stdcall Round_To_Int_410BF0(Fix16& a1)
++    static inline s32 __stdcall Round_To_Int_410BF0(const Fix16& a1)
+     {
+         s32 v = a1.mValue;
+         return (v + 0x2000) >> 14;
+@@ -338,7 +338,7 @@ class Fix16
+         return Fix16(sqrt(input.AsDouble()));
+     }
+ 
+-    EXPORT static Fix16 __stdcall Max_44E540(Fix16& pLhs, Fix16& pRhs);
++    EXPORT static Fix16 __stdcall Max_44E540(const Fix16& pLhs, const Fix16& pRhs);
+     // 9.6f 0x41E130, out-of-line copy Max_44E540. Small functions inline it (Ped_List_4::GetFromListClosestPedToPoint_471340),
+     // and as a site after the two Abs it sets their nested budget in MaxAbsDistance_42A6B0
+     inline static Fix16 __stdcall Max_41E130(const Fix16& a, const Fix16& b)
+@@ -372,7 +372,7 @@ class Fix16
+     EXPORT Fix16 Negate_4086A0() const throw();
+ 
+     // Needed this for a GetLength variant used by miss2_0x11C::GetSpeed_50E190.
+-    inline static Fix16 __stdcall Abs_negate_out_of_line(Fix16& input)
++    inline static Fix16 __stdcall Abs_negate_out_of_line(const Fix16& input)
+     {
+         if (input.mValue > 0)
+         {
+@@ -421,7 +421,7 @@ class Fix16
+     }
+ 
+     // https://decomp.me/scratch/MqQPJ
+-    inline static Fix16 __stdcall MaxAbsDistance_42A6B0(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
++    inline static Fix16 __stdcall MaxAbsDistance_42A6B0(const Fix16& x1, const Fix16& y1, const Fix16& x2, const Fix16& y2)
+     {
+         Fix16 diff_x;
+         diff_x = x2 - x1;
+@@ -437,7 +437,7 @@ class Fix16
+     EXPORT static Fix16 __stdcall ClampToRangeFlexible_ool_55EEE0(Fix16& a2, Fix16& a3, Fix16& a4);
+ 
+     // NOTE: 10.5 function - matched but inlined
+-    static inline Fix16 __stdcall ClampToRangeFlexible_55EEE0(Fix16& a2, Fix16& a3, Fix16& a4)
++    static inline Fix16 __stdcall ClampToRangeFlexible_55EEE0(const Fix16& a2, const Fix16& a3, const Fix16& a4)
+     {
+         if (a2 > a3)
+         {
+@@ -489,7 +489,7 @@ class Fix16
+         return Fix16(mValue + 0x4000, 0);
+     }
+ 
+-    EXPORT static class Ang16 __stdcall atan2_fixed_405320(Fix16& y, Fix16& x);
++    EXPORT static class Ang16 __stdcall atan2_fixed_405320(const Fix16& y, const Fix16& x);
+ 
+   public:
+     s32 mValue;
+-- 
+2.53.0
+

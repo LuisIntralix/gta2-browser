@@ -1,0 +1,339 @@
+From e62a77c06a56be07f9b16f7ab4c957848c8bfbf4 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:14:56 +1100
+Subject: [PATCH 05/23] port: const reference parameters for temporaries
+ (lvalue-candidate pass)
+
+---
+ Source/CarPhysics_B0.cpp |  4 ++--
+ Source/CarPhysics_B0.hpp |  4 ++--
+ Source/Car_BC.cpp        |  4 ++--
+ Source/Cranes.cpp        |  2 +-
+ Source/Fix16_Point.cpp   |  2 +-
+ Source/Fix16_Point.hpp   | 10 +++++-----
+ Source/Particle_8.cpp    |  2 +-
+ Source/Ped.cpp           |  4 ++--
+ Source/Police_38.cpp     |  2 +-
+ Source/Weapon_30.cpp     |  6 +++---
+ Source/ang16.hpp         |  2 +-
+ Source/char.cpp          |  2 +-
+ Source/sprite.cpp        | 16 ++++++++--------
+ Source/sprite.hpp        |  4 ++--
+ 14 files changed, 32 insertions(+), 32 deletions(-)
+
+diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
+index dbaf245..ee7a6ba 100644
+--- a/Source/CarPhysics_B0.cpp
++++ b/Source/CarPhysics_B0.cpp
+@@ -2228,10 +2228,10 @@ char_type CarPhysics_B0::CheckPendingCollision_55F360()
+ MATCH_FUNC(0x55F3B0)
+ EXPORT Fix16_Point __stdcall ComputeLineLineIntersection_55F3B0(Fix16 OwnerMass,
+                                                                 Fix16 TargetMass,
+-                                                                Fix16_Point& RelativeVelocity,
++                                                                const Fix16_Point& RelativeVelocity,
+                                                                 Fix16_Point& DistToCollision_ByRef,
+                                                                 Fix16_Point& CollisionIntersectPoint,
+-                                                                Fix16_Point& CoM_related,
++                                                                const Fix16_Point& CoM_related,
+                                                                 Fix16_Point& a8,
+                                                                 Fix16 OwnerMomOfInertia,
+                                                                 Fix16 TargetMomOfInertia,
+diff --git a/Source/CarPhysics_B0.hpp b/Source/CarPhysics_B0.hpp
+index 19d2b02..4934307 100644
+--- a/Source/CarPhysics_B0.hpp
++++ b/Source/CarPhysics_B0.hpp
+@@ -29,10 +29,10 @@ EXTERN_GLOBAL(Fix16_Point, CollisionIntersectionPoint_6FE1A0);
+ 
+ EXPORT Fix16_Point __stdcall ComputeLineLineIntersection_55F3B0(Fix16 OwnerMass,
+                                                                 Fix16 TargetMass,
+-                                                                Fix16_Point& RelativeVelocity,
++                                                                const Fix16_Point& RelativeVelocity,
+                                                                 Fix16_Point& DistToCollision_ByRef,
+                                                                 Fix16_Point& CollisionIntersectPoint,
+-                                                                Fix16_Point& CoM_related,
++                                                                const Fix16_Point& CoM_related,
+                                                                 Fix16_Point& a8,
+                                                                 Fix16 OwnerMomOfInertia,
+                                                                 Fix16 TargetMomOfInertia,
+diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
+index 7b7ae3e..fb9c01f 100644
+--- a/Source/Car_BC.cpp
++++ b/Source/Car_BC.cpp
+@@ -5670,7 +5670,7 @@ Ang16 Car_BC::GetRadioTowerAngle_442520()
+ EXTERN_GLOBAL(Fix16, kFPZero_6691B0);
+ DEFINE_GLOBAL_INIT(Fix16, kAngFix16FullCircle_66A8E4, Fix16(0x18F60, 0), 0x66A8E4);
+ DEFINE_GLOBAL_INIT(Fix16, kAngFix16HalfCircle_6691EC, Fix16(0xC7B0, 0), 0x6691EC);
+-inline Fix16 __stdcall WrapAngle_40E790(Fix16& unk) // 9.6f inlined func
++inline Fix16 __stdcall WrapAngle_40E790(const Fix16& unk) // 9.6f inlined func
+ {
+     Fix16 result = unk;
+     for (; result < kFPZero_6691B0; result += kAngFix16FullCircle_66A8E4)
+@@ -5688,7 +5688,7 @@ inline Fix16 __stdcall WrapAngle_40E790(Fix16& unk) // 9.6f inlined func
+ // TODO: Move
+ // https://decomp.me/scratch/GnD4O
+ MATCH_FUNC(0x405CE0)
+-EXPORT void __stdcall SmoothApproachAngle_405CE0(Fix16& a1, Fix16& a2, Fix16& a3, Fix16& a4, Fix16& a5)
++EXPORT void __stdcall SmoothApproachAngle_405CE0(const Fix16& a1, Fix16& a2, Fix16& a3, Fix16& a4, Fix16& a5)
+ {
+     if (a1 - a3 > kAngFix16HalfCircle_6691EC)
+     {
+diff --git a/Source/Cranes.cpp b/Source/Cranes.cpp
+index 6af5a9b..7116b36 100644
+--- a/Source/Cranes.cpp
++++ b/Source/Cranes.cpp
+@@ -14,7 +14,7 @@
+ #include "sprite.hpp"
+ 
+ // TODO: Move
+-EXPORT void __stdcall SmoothApproachAngle_405CE0(Fix16& a1, Fix16& a2, Fix16& a3, Fix16& a4, Fix16& a5);
++EXPORT void __stdcall SmoothApproachAngle_405CE0(const Fix16& a1, Fix16& a2, Fix16& a3, Fix16& a4, Fix16& a5);
+ EXPORT void __stdcall SmoothApproach_4F7540(Fix16& Coord_1, Fix16& Velocity_1, Fix16& Coord_2, Fix16& Velocity_2, Fix16& Velocity_3);
+ 
+ DEFINE_GLOBAL_INIT(Fix16, kHomeHookRadius_679E58, Fix16(0x2000, 0), 0x679E58);
+diff --git a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
+index 371bbc6..38533bb 100644
+--- a/Source/Fix16_Point.cpp
++++ b/Source/Fix16_Point.cpp
+@@ -50,7 +50,7 @@ Fix16_Point Fix16_Point::NormalizeSafe_442AD0()
+     }
+ }
+ 
+-Fix16_Point Fix16_Point::operator/(Fix16& in)
++Fix16_Point Fix16_Point::operator/(const Fix16& in)
+ {
+     return Fix16_Point(x / in, y / in);
+ }
+diff --git a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
+index 7644e44..2b1c186 100644
+--- a/Source/Fix16_Point.hpp
++++ b/Source/Fix16_Point.hpp
+@@ -68,7 +68,7 @@ struct Fix16_Point_POD
+         y = ((-x_old) * sin) + (y * cos);
+     }
+ 
+-    Fix16_Point_POD& operator+=(Fix16_Point& other);
++    Fix16_Point_POD& operator+=(const Fix16_Point& other);
+ 
+     // Same layout: a POD passed where a Fix16_Point is expected (a free inline site, like the other way)
+     operator Fix16_Point&()
+@@ -253,7 +253,7 @@ class Fix16_Point
+     }
+ 
+ 
+-    Fix16_Point& operator+=(Fix16_Point& other)
++    Fix16_Point& operator+=(const Fix16_Point& other)
+     {
+         x += other.x;
+         y += other.y;
+@@ -513,7 +513,7 @@ class Fix16_Point
+         }
+     }
+ 
+-    Fix16_Point operator*(Fix16& in)
++    Fix16_Point operator*(const Fix16& in)
+     {
+         return Fix16_Point(x * in, y * in);
+     }
+@@ -526,7 +526,7 @@ class Fix16_Point
+     EXPORT Fix16_Point MultBy_442C80(const s32& factor);
+ 
+     // 10.0 0x442CB0
+-    EXPORT Fix16_Point operator/(Fix16& in);
++    EXPORT Fix16_Point operator/(const Fix16& in);
+ 
+     // Unused (ApplyExplosionImpulse_443710 calls GetLength_41E260 now), kept for the same reason as
+     // GetLength_no_sqrt_inline
+@@ -638,7 +638,7 @@ class Fix16_Point
+     Fix16 y;
+ };
+ 
+-inline Fix16_Point_POD& Fix16_Point_POD::operator+=(Fix16_Point& other)
++inline Fix16_Point_POD& Fix16_Point_POD::operator+=(const Fix16_Point& other)
+ {
+     x += other.x;
+     y += other.y;
+diff --git a/Source/Particle_8.cpp b/Source/Particle_8.cpp
+index e420a03..59765aa 100644
+--- a/Source/Particle_8.cpp
++++ b/Source/Particle_8.cpp
+@@ -495,7 +495,7 @@ void Particle_8::EmitFireTruckSprayParticle_53FAE0(Sprite* pSprite)
+ 
+ // Ang16::PolarToCartesian_41FC20 with the cosine multiply written as the out-of-line Multiply_408680
+ // the original calls (past the inline budget VC6 would call a COMDAT copy of operator* instead).
+-static inline void PolarToCartesian_OutOfLineCos(Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
++static inline void PolarToCartesian_OutOfLineCos(const Ang16& angle, Fix16& radius, Fix16& ret1, Fix16& ret2)
+ {
+     ret1 = Ang16::sine_40F500(angle) * radius;
+     ret2 = Ang16::cosine_40F520(angle).Multiply_408680(radius);
+diff --git a/Source/Ped.cpp b/Source/Ped.cpp
+index 7450d4b..ed9a30d 100644
+--- a/Source/Ped.cpp
++++ b/Source/Ped.cpp
+@@ -1655,7 +1655,7 @@ void Ped::HandlePedCrossingTrigger_45CF20(Object_2C* pObj)
+     }
+ }
+ 
+-Fix16 __stdcall sub_4614E0(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2);
++Fix16 __stdcall sub_4614E0(Fix16& x1, Fix16& y1, const Fix16& x2, const Fix16& y2);
+ 
+ // 10.5 inlines this into HandlePedHitByObject_45D000 (the first call there; the second one
+ // calls 0x465D00) and into IsThreatToSearchingPed_4661F0 (search mode 1), so it has to be defined
+@@ -5929,7 +5929,7 @@ char_type Ped::IsInvisibleOnFoot_466B70()
+ // Returns Fix16 by value (hidden out pointer, ret $0x14). Max of the two Abs written out with
+ // the y abs first: Fix16::Max takes references and spills both to the stack.
+ MATCH_FUNC(0x4614e0)
+-Fix16 __stdcall sub_4614E0(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
++Fix16 __stdcall sub_4614E0(Fix16& x1, Fix16& y1, const Fix16& x2, const Fix16& y2)
+ {
+     Fix16 diff_x = x2 - x1;
+     Fix16 diff_y = y2 - y1;
+diff --git a/Source/Police_38.cpp b/Source/Police_38.cpp
+index c6d5b6e..7bf2bb2 100644
+--- a/Source/Police_38.cpp
++++ b/Source/Police_38.cpp
+@@ -828,7 +828,7 @@ DEFINE_GLOBAL_INIT(Fix16, dword_6FECB8, Fix16(0x147, 0), 0x6FECB8);
+ 
+ // MaxAbsDistance_42A6B0 as State5_PursueOrChase_572920 inlines it: past the nested inline budget, Max is the named
+ // out-of-line copy Max_44E540 (as in Weapon_30's MaxAbsDistance_5DF270)
+-static inline Fix16 MaxAbsDistance_572920(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
++static inline Fix16 MaxAbsDistance_572920(const Fix16& x1, const Fix16& y1, const Fix16& x2, const Fix16& y2)
+ {
+     Fix16 diff_x;
+     diff_x = x2 - x1;
+diff --git a/Source/Weapon_30.cpp b/Source/Weapon_30.cpp
+index f1e1bfd..a63b169 100644
+--- a/Source/Weapon_30.cpp
++++ b/Source/Weapon_30.cpp
+@@ -725,7 +725,7 @@ void Weapon_30::throwable_5DDFC0(s32 obj_idx, s32 a3, s32 a4)
+     }
+ }
+ 
+-EXPORT void __stdcall sub_5DE910(Fix16_Point_POD a1, Fix16_Point& a2, Fix16 a3);
++EXPORT void __stdcall sub_5DE910(Fix16_Point_POD a1, const Fix16_Point& a2, Fix16 a3);
+ 
+ // GetLength_41E260 with both Abs and the x multiply, the add and the square root out of line
+ static inline Fix16 BeamLength_5DE4F0(Fix16_Point& d)
+@@ -884,7 +884,7 @@ static inline Fix16 BeamLength_5DE910(Fix16_Point& d)
+ // (likely the original's by-value a1 is one of them). `d` is reused for the rest of the way and
+ // `len` for the straight segment count, as the original's frame shows.
+ MATCH_FUNC(0x5de910)
+-void __stdcall sub_5DE910(Fix16_Point_POD a1, Fix16_Point& a2, Fix16 a3)
++void __stdcall sub_5DE910(Fix16_Point_POD a1, const Fix16_Point& a2, Fix16 a3)
+ {
+     Fix16_Point d;
+     Fix16_Point start;
+@@ -980,7 +980,7 @@ void __stdcall sub_5DE910(Fix16_Point_POD a1, Fix16_Point& a2, Fix16 a3)
+ 
+ // MaxAbsDistance_42A6B0 as sub_5DF270 inlines it: past the inline budget, Max is the named out-of-line copy
+ // Max_44E540 (the Abs calls and the y subtraction go out of line by themselves)
+-static inline Fix16 MaxAbsDistance_5DF270(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
++static inline Fix16 MaxAbsDistance_5DF270(const Fix16& x1, const Fix16& y1, Fix16& x2, Fix16& y2)
+ {
+     Fix16 diff_x;
+     diff_x = x2 - x1;
+diff --git a/Source/ang16.hpp b/Source/ang16.hpp
+index 10ae68e..8fc7e88 100644
+--- a/Source/ang16.hpp
++++ b/Source/ang16.hpp
+@@ -396,7 +396,7 @@ class Ang8
+ 
+ inline void __stdcall RotateAndTranslatePoint_42A720(Fix16& pInX,
+                                                          Fix16& pInY,
+-                                                         Ang16& pRotAng,
++                                                         const Ang16& pRotAng,
+                                                          Fix16& pTransX,
+                                                          Fix16& pTransY,
+                                                          Fix16& pRotTransX,
+diff --git a/Source/char.cpp b/Source/char.cpp
+index 9371c2b..367fe42 100644
+--- a/Source/char.cpp
++++ b/Source/char.cpp
+@@ -4605,7 +4605,7 @@ static inline s32 IsOnSlopeBlock(gmp_block_info* pBlock)
+ 
+ // MaxAbsDistance_42A6B0 as state_1_5504F0 inlines it: past the nested inline budget, Max is the named
+ // out-of-line copy Max_44E540 (as in Weapon_30's MaxAbsDistance_5DF270)
+-static inline Fix16 MaxAbsDistance_5504F0(Fix16& x1, Fix16& y1, Fix16& x2, Fix16& y2)
++static inline Fix16 MaxAbsDistance_5504F0(Fix16& x1, Fix16& y1, const Fix16& x2, const Fix16& y2)
+ {
+     Fix16 diff_x;
+     diff_x = x2 - x1;
+diff --git a/Source/sprite.cpp b/Source/sprite.cpp
+index 968482a..2a156fc 100644
+--- a/Source/sprite.cpp
++++ b/Source/sprite.cpp
+@@ -29,7 +29,7 @@
+ #include "winmain.hpp" // TODO: only because of gLighting_626A09
+ 
+ // Forward declarations: the functions below are in address order
+-EXPORT void __stdcall ProjectOntoAxis_5A5AA0(Fix16& xpos1, Fix16& ypos1, Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY);
++EXPORT void __stdcall ProjectOntoAxis_5A5AA0(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY);
+ static inline void ProjectToScreen_5A5690(Fix16 x, Fix16 y, Fix16 z, Fix16* pOut1, Fix16* pOut2);
+ EXTERN_GLOBAL(u16, gDebugColour_626260);
+ 
+@@ -421,7 +421,7 @@ s16 CarFlags::Delta_48F8B0(u16& sprite_idx, u8& bRet, const u16& a4, const u32&
+ }
+ 
+ MATCH_FUNC(0x4F76A0)
+-EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix16& minY, Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1)
++EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(const Fix16& minX, Fix16& minY, const Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1)
+ {
+ 
+     // Raw compares: with Fix16 operators VC6 runs out of inline budget and calls the Fix16_Point ctor
+@@ -458,7 +458,7 @@ EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix1
+ }
+ 
+ MATCH_FUNC(0x4F77D0)
+-EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(Fix16& minX, Fix16& minY, Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1)
++EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(const Fix16& minX, Fix16& minY, const Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1)
+ {
+ 
+     // Same shape as ComputeScanlineIntersectionY_4F76A0, same leftover diff.
+@@ -876,9 +876,9 @@ void Sprite::SetDefaultNumBySpriteType_59E960()
+ }
+ 
+ // RotateAndTranslatePoint_42A720 with the out-of-line Fix16 operator copies
+-static inline void __stdcall RotateAndTranslatePoint_ool_42A720(Fix16& pInX,
+-                                                                Fix16& pInY,
+-                                                                Ang16& pRotAng,
++static inline void __stdcall RotateAndTranslatePoint_ool_42A720(const Fix16& pInX,
++                                                                const Fix16& pInY,
++                                                                const Ang16& pRotAng,
+                                                                 Fix16& pTransX,
+                                                                 Fix16& pTransY,
+                                                                 Fix16& pRotTransX,
+@@ -958,7 +958,7 @@ s16 Sprite::GetTruePalette_59EAA0()
+ // inline expansions: the unary minus is the out-of-line copy (Negate_4086A0)
+ static inline void __stdcall RotateAndTranslatePoint_NegOOL_42A720(Fix16& pInX,
+                                                                   Fix16& pInY,
+-                                                                  Ang16& pRotAng,
++                                                                  const Ang16& pRotAng,
+                                                                   Fix16& pTransX,
+                                                                   Fix16& pTransY,
+                                                                   Fix16& pRotTransX,
+@@ -2669,7 +2669,7 @@ Sprite_8::Sprite_8()
+ }
+ 
+ MATCH_FUNC(0x5A5AA0)
+-EXPORT void __stdcall ProjectOntoAxis_5A5AA0(Fix16& xpos1, Fix16& ypos1, Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY)
++EXPORT void __stdcall ProjectOntoAxis_5A5AA0(const Fix16& xpos1, const Fix16& ypos1, const Ang16& angle, Fix16& xpos2, Fix16& ypos2, Fix16& outX, Fix16& outY)
+ {
+     outX = (Ang16::cosine_40F520(angle) * (xpos1 - xpos2)) + (Ang16::sine_40F500(angle) * (ypos1 - ypos2));
+     outY = (Ang16::sine_40F500(angle) * (xpos2 - xpos1)) + (Ang16::cosine_40F520(angle) * (ypos1 - ypos2));
+diff --git a/Source/sprite.hpp b/Source/sprite.hpp
+index 263f693..56688f8 100644
+--- a/Source/sprite.hpp
++++ b/Source/sprite.hpp
+@@ -16,8 +16,8 @@ EXTERN_GLOBAL_ARRAY(Vert, gTileVerts_7036D0, 8);
+ 
+ EXTERN_GLOBAL(Fix16, gFix16_7035C0);
+ 
+-EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(Fix16& minX, Fix16& minY, Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1);
+-EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(Fix16& minX, Fix16& minY, Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1);
++EXPORT bool __stdcall ComputeScanlineIntersectionX_4F77D0(const Fix16& minX, Fix16& minY, const Fix16& scanLineX, Fix16_Point& p0, Fix16_Point& p1);
++EXPORT char_type __stdcall ComputeScanlineIntersectionY_4F76A0(const Fix16& minX, Fix16& minY, const Fix16& scanLineY, Fix16_Point& p0, Fix16_Point& p1);
+ 
+ class Car_BC;
+ class Char_B4;
+-- 
+2.53.0
+

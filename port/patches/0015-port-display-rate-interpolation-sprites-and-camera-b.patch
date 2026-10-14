@@ -1,0 +1,417 @@
+From 5f2d773478fe04b6821920e5132260e496c8dcd5 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 17:10:06 +1100
+Subject: [PATCH 15/23] port: display-rate interpolation (sprites and camera
+ between 30 Hz updates; HUD replay; simulation state restored)
+
+---
+ Source/Camera.hpp             |   7 +
+ Source/Game_0x40.cpp          |  24 +++-
+ Source/port_interpolation.cpp | 263 ++++++++++++++++++++++++++++++++++
+ Source/winmain.cpp            |  35 +++++
+ 4 files changed, 327 insertions(+), 2 deletions(-)
+ create mode 100644 Source/port_interpolation.cpp
+
+diff --git a/Source/Camera.hpp b/Source/Camera.hpp
+index b26bb68..36e738d 100644
+--- a/Source/Camera.hpp
++++ b/Source/Camera.hpp
+@@ -244,6 +244,13 @@ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
+ extern "C" s32 gGta2PortCameraMode;
+ void Gta2Port_ModernCameraTick(Camera_0xBC* cam);
+ Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam);
++// port_interpolation.cpp (D04)
++extern "C" s32 gGta2PortInterpolate;
++void Gta2Port_InterpTick();
++void Gta2Port_InterpBegin(f32 t, bool extra);
++void Gta2Port_InterpEnd();
++bool Gta2Port_InterpIsExtraDraw();
++bool Gta2Port_InterpDrawnZ(Fix16* pZ);
+ #endif
+ 
+ extern inline Fix16 Max_41E130(Fix16 a1, Fix16 a2);
+diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
+index 8f4c374..92377fa 100644
+--- a/Source/Game_0x40.cpp
++++ b/Source/Game_0x40.cpp
+@@ -68,6 +68,10 @@
+ #ifdef GTA2_PORT
+ // port/render/frame.cpp: width of the frame in reference pixels and the HUD box offset.
+ extern "C" void Gta2Port_SetFrameLayout(s32 width, s32 hudOffsetX);
++// port/render/frame.cpp: the HUD's draw commands are kept so that interpolated draws can replay them.
++extern "C" void Gta2Port_HudBegin();
++extern "C" void Gta2Port_HudEnd();
++extern "C" void Gta2Port_HudReplay();
+ #endif
+ 
+ DEFINE_GLOBAL_INIT(Fix16, dword_67DECC, Fix16(5), 0x67DECC);
+@@ -388,7 +392,12 @@ void Game_0x40::Draw_4B92D0()
+ #ifdef GTA2_PORT
+     // Draw from the Modern camera's height (D17); the simulated height is restored below.
+     const Fix16 simulated_cam_z = gViewCamera_676978->field_98_cam_pos2.field_8_z;
+-    gViewCamera_676978->field_98_cam_pos2.field_8_z = Gta2Port_PresentedCameraZ(gViewCamera_676978);
++    Fix16 drawn_z;
++    if (!Gta2Port_InterpDrawnZ(&drawn_z)) // interpolated between updates (D04), or this update's
++    {
++        drawn_z = Gta2Port_PresentedCameraZ(gViewCamera_676978);
++    }
++    gViewCamera_676978->field_98_cam_pos2.field_8_z = drawn_z;
+ #endif
+ 
+     gpMapRenderer_6F66E4->ClearDrawnTileCount_4F6A10();
+@@ -416,8 +425,19 @@ void Game_0x40::Draw_4B92D0()
+ 
+ #ifdef GTA2_PORT
+     Gta2Port_SetFrameLayout(gViewCamera_676978->field_68_screen_px_width, gViewCamera_676978->PortHudOffsetX());
+-#endif
++    if (Gta2Port_InterpIsExtraDraw())
++    {
++        Gta2Port_HudReplay(); // a draw between updates: the HUD as last drawn (it services timers while drawing)
++    }
++    else
++    {
++        Gta2Port_HudBegin();
++        gHud_2B00_706620->DrawGui_5D6860(); // user
++        Gta2Port_HudEnd();
++    }
++#else
+     gHud_2B00_706620->DrawGui_5D6860(); // user
++#endif
+ 
+     if (bDo_mike_67D5CC)
+     {
+diff --git a/Source/port_interpolation.cpp b/Source/port_interpolation.cpp
+new file mode 100644
+index 0000000..4dbc60a
+--- /dev/null
++++ b/Source/port_interpolation.cpp
+@@ -0,0 +1,263 @@
++// Browser port: display-rate interpolation (decision D04), presentation only.
++//
++// The game updates at a fixed 30 per second (Game_0x40::GetFrameDurationMs_4B8BB0)
++// and draws once after each update, so a 60 Hz+ display shows every game frame
++// two or more times and motion judders. With interpolation on:
++//  - after every update, the position, height and rotation of every sprite and
++//    the view camera are recorded (Gta2Port_InterpTick);
++//  - every draw - the game's own after-update draw and extra draws between
++//    updates (winmain.cpp, port patch) - puts sprites and camera part-way
++//    between the last two updates, by the time elapsed since the last one, and
++//    puts everything back afterwards (the display runs one update behind, the
++//    standard trade-off);
++//  - extra draws replay the HUD of the last real draw instead of running the
++//    HUD again (it services timers while drawing), and keep the lighting fade
++//    where it was (MapRenderer::Draw advances it once per draw).
++// A sprite's cached rotated box (Sprite_4C, also read by collision code) is
++// recomputed at the in-between position for drawing and restored byte for
++// byte afterwards, so the simulation never sees in-between state.
++#include "Camera.hpp"
++#include "Game_0x40.hpp"
++#include "MapRenderer.hpp"
++#include "Player.hpp"
++#include "sprite.hpp"
++
++#include <string.h>
++
++extern "C" {
++s32 gGta2PortInterpolate = 1; // set from the shell
++s32 gGta2PortDrawnCam[2];     // camera x, y (Fix16 raw) of the last draw, for measurements
++}
++
++namespace
++{
++constexpr s32 kSprites = 5031; // Sprite_Pool: PoolBasic<Sprite, 5031>
++constexpr s32 kMaxJump = 2 * 16384; // more than 2 blocks in one update: a teleport or a reused sprite
++
++struct Snap
++{
++    s32 x, y, z;
++    s16 rot;
++    s16 id;
++    s32 type;
++};
++
++struct CamSnap
++{
++    s32 x, y, z;
++    bool valid;
++};
++
++Snap gPrev[kSprites];
++Snap gCur[kSprites];
++CamSnap gCamPrev, gCamCur;
++s32 gTicks = 0;
++
++// What one in-between draw changed, to put back afterwards.
++struct Moved
++{
++    Sprite* s;
++    Fix16_Point_POD xy;
++    Fix16 z;
++    Ang16 rot;
++    u8 box[sizeof(Sprite_4C)];
++};
++Moved gMoved[kSprites];
++s32 gMovedCount = 0;
++bool gActive = false;
++bool gExtra = false;
++Fix16 gSavedCamX, gSavedCamY;
++Fix16 gSavedAmbient, gSavedAmbientStep;
++Camera_0xBC* gCam = nullptr;
++Fix16 gDrawnZ;
++bool gHaveDrawnZ = false;
++
++Camera_0xBC* ViewCamera()
++{
++    if (!gGame_0x40_67E008 || !gGame_0x40_67E008->field_1C_view_player)
++    {
++        return nullptr;
++    }
++    return &gGame_0x40_67E008->field_1C_view_player->field_14C_view_camera;
++}
++
++s32 Lerp(s32 a, s32 b, f32 t)
++{
++    return a + static_cast<s32>((b - a) * t);
++}
++
++// Ang16 runs 0..1439; take the short way round.
++s16 LerpAngle(s16 a, s16 b, f32 t)
++{
++    s32 d = b - a;
++    if (d > 720)
++    {
++        d -= 1440;
++    }
++    else if (d < -720)
++    {
++        d += 1440;
++    }
++    s32 r = a + static_cast<s32>(d * t);
++    r %= 1440;
++    if (r < 0)
++    {
++        r += 1440;
++    }
++    return static_cast<s16>(r);
++}
++} // namespace
++
++// After every game update (winmain.cpp RunGameFrame, port patch).
++void Gta2Port_InterpTick()
++{
++    if (!gGta2PortInterpolate || !gSprite_Pool_703818)
++    {
++        gTicks = 0;
++        return;
++    }
++    memcpy(gPrev, gCur, sizeof(gCur));
++    gCamPrev = gCamCur;
++    Sprite* pool = gSprite_Pool_703818->field_0_pool.field_4_pool;
++    for (s32 i = 0; i < kSprites; ++i)
++    {
++        const Sprite& s = pool[i];
++        gCur[i] = {s.field_14_xy.x.mValue, s.field_14_xy.y.mValue, s.field_1C_zpos.mValue, s.field_0.rValue, s.field_20_id,
++                   s.field_30_sprite_type_enum};
++    }
++    gCamCur.valid = false;
++    if (Camera_0xBC* c = ViewCamera())
++    {
++        gCamCur = {c->field_98_cam_pos2.field_0_x.mValue, c->field_98_cam_pos2.field_4_y.mValue,
++                   Gta2Port_PresentedCameraZ(c).mValue, true};
++    }
++    if (gTicks < 2)
++    {
++        ++gTicks;
++    }
++}
++
++// The camera height to draw from while an interpolated draw is active (Game_0x40::Draw).
++bool Gta2Port_InterpDrawnZ(Fix16* pZ)
++{
++    if (gActive && gHaveDrawnZ)
++    {
++        *pZ = gDrawnZ;
++        return true;
++    }
++    return false;
++}
++
++bool Gta2Port_InterpIsExtraDraw()
++{
++    return gActive && gExtra;
++}
++
++// Puts sprites and the camera at fraction t (0..1) of the way from the
++// previous update to the last one. extra: a draw between updates.
++void Gta2Port_InterpBegin(f32 t, bool extra)
++{
++    gActive = false;
++    gMovedCount = 0;
++    gHaveDrawnZ = false;
++    if (!gGta2PortInterpolate || gTicks < 2 || !gSprite_Pool_703818)
++    {
++        return;
++    }
++    t = t < 0 ? 0 : t > 1 ? 1 : t;
++    gActive = true;
++    gExtra = extra;
++    Sprite* pool = gSprite_Pool_703818->field_0_pool.field_4_pool;
++    for (s32 i = 0; i < kSprites; ++i)
++    {
++        const Snap& a = gPrev[i];
++        const Snap& b = gCur[i];
++        Sprite& s = pool[i];
++        if (a.type != b.type || a.id != b.id || !s.field_4_0x4C_len ||
++            (a.x == b.x && a.y == b.y && a.z == b.z && a.rot == b.rot))
++        {
++            continue;
++        }
++        // only sprites still where the last update left them, moved a plausible distance
++        if (s.field_14_xy.x.mValue != b.x || s.field_14_xy.y.mValue != b.y || s.field_0.rValue != b.rot)
++        {
++            continue;
++        }
++        const s32 dx = b.x - a.x, dy = b.y - a.y;
++        if (dx > kMaxJump || dx < -kMaxJump || dy > kMaxJump || dy < -kMaxJump)
++        {
++            continue;
++        }
++        Moved& m = gMoved[gMovedCount++];
++        m.s = &s;
++        m.xy = s.field_14_xy;
++        m.z = s.field_1C_zpos;
++        m.rot = s.field_0;
++        memcpy(m.box, s.field_4_0x4C_len, sizeof(Sprite_4C));
++        s.field_14_xy.x.mValue = Lerp(a.x, b.x, t);
++        s.field_14_xy.y.mValue = Lerp(a.y, b.y, t);
++        s.field_1C_zpos.mValue = Lerp(a.z, b.z, t);
++        s.field_0.rValue = LerpAngle(a.rot, b.rot, t);
++        s.field_4_0x4C_len->field_48_bBoxUpToDate = false; // drawn from the in-between position
++    }
++    gCam = ViewCamera();
++    if (gCam && gCamPrev.valid && gCamCur.valid)
++    {
++        gSavedCamX = gCam->field_98_cam_pos2.field_0_x;
++        gSavedCamY = gCam->field_98_cam_pos2.field_4_y;
++        const s32 dx = gCamCur.x - gCamPrev.x, dy = gCamCur.y - gCamPrev.y;
++        if (dx <= kMaxJump * 4 && dx >= -kMaxJump * 4 && dy <= kMaxJump * 4 && dy >= -kMaxJump * 4)
++        {
++            gCam->field_98_cam_pos2.field_0_x.mValue = Lerp(gCamPrev.x, gCamCur.x, t);
++            gCam->field_98_cam_pos2.field_4_y.mValue = Lerp(gCamPrev.y, gCamCur.y, t);
++            gDrawnZ.mValue = Lerp(gCamPrev.z, gCamCur.z, t);
++            gHaveDrawnZ = true;
++        }
++    }
++    else
++    {
++        gCam = nullptr;
++    }
++    if (Camera_0xBC* c = ViewCamera())
++    {
++        gGta2PortDrawnCam[0] = c->field_98_cam_pos2.field_0_x.mValue;
++        gGta2PortDrawnCam[1] = c->field_98_cam_pos2.field_4_y.mValue;
++    }
++    if (extra && gpMapRenderer_6F66E4)
++    {
++        gSavedAmbient = gpMapRenderer_6F66E4->field_0_ambient;
++        gSavedAmbientStep = gpMapRenderer_6F66E4->field_8_ambient_step;
++    }
++}
++
++// Puts everything back exactly as the last update left it.
++void Gta2Port_InterpEnd()
++{
++    if (!gActive)
++    {
++        return;
++    }
++    for (s32 i = 0; i < gMovedCount; ++i)
++    {
++        Moved& m = gMoved[i];
++        m.s->field_14_xy = m.xy;
++        m.s->field_1C_zpos = m.z;
++        m.s->field_0 = m.rot;
++        memcpy(m.s->field_4_0x4C_len, m.box, sizeof(Sprite_4C));
++    }
++    gMovedCount = 0;
++    if (gCam)
++    {
++        gCam->field_98_cam_pos2.field_0_x = gSavedCamX;
++        gCam->field_98_cam_pos2.field_4_y = gSavedCamY;
++        gCam = nullptr;
++    }
++    if (gExtra && gpMapRenderer_6F66E4)
++    {
++        gpMapRenderer_6F66E4->field_0_ambient = gSavedAmbient;
++        gpMapRenderer_6F66E4->field_8_ambient_step = gSavedAmbientStep;
++    }
++    gActive = false;
++    gExtra = false;
++    gHaveDrawnZ = false;
++}
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index ef61b28..d7cd529 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1026,9 +1026,29 @@ EXPORT char ExecuteGame_4DA780()
+ }
+ 
+ MATCH_FUNC(0x4DA7B0)
++#ifdef GTA2_PORT
++// Display-rate interpolation (port_interpolation.cpp): how far the display is between the previous
++// update and the last one, from the time left until the next update is due.
++static f32 PortInterpFraction()
++{
++    const s32 frame_ms = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
++    const s32 until_next = static_cast<s32>(gMatchStartTime_6F5A28 - timeGetTime());
++    const f32 t = 1.0f - static_cast<f32>(until_next) / static_cast<f32>(frame_ms);
++    return t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
++}
++static DWORD sPortLastDrawMs;
++#endif
++
+ void __stdcall Draw_4DA7B0()
+ {
++#ifdef GTA2_PORT
++    Gta2Port_InterpBegin(PortInterpFraction(), false);
++    gGame_0x40_67E008->Draw_4B92D0();
++    Gta2Port_InterpEnd();
++    sPortLastDrawMs = timeGetTime();
++#else
+     gGame_0x40_67E008->Draw_4B92D0();
++#endif
+     pVid_FlipBuffers(gVidSys_7071D0);
+     if (bSkip_lid_67D546 || bSkip_top_67D574 || bSkip_bottom_67D4E7 || bSkip_left_67D6BF || bSkip_right_67D4E4)
+     {
+@@ -1504,6 +1524,9 @@ EXPORT u8 RunGameFrame_4DA850()
+                 bInputsPending_6F5760 = 0;
+             }
+             bContinue = ExecuteGame_4DA780();
++#ifdef GTA2_PORT
++            Gta2Port_InterpTick();
++#endif
+             s32 v2 = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
+             bForceGameUpdate_6F5880 = 0;
+             gMatchStartTime_6F5A28 += v2;
+@@ -1521,6 +1544,18 @@ EXPORT u8 RunGameFrame_4DA850()
+             do_network_and_local_inputs_4DAF30();
+             bInputsPending_6F5760 = 0;
+         }
++#ifdef GTA2_PORT
++        // Between updates: draw again, interpolated, at most every 6 ms (D04). Not while paused.
++        else if (gGta2PortInterpolate && gGame_0x40_67E008->field_0_game_state == GameState::Running_1 &&
++                 Time - sPortLastDrawMs >= 6)
++        {
++            Gta2Port_InterpBegin(PortInterpFraction(), true);
++            gGame_0x40_67E008->Draw_4B92D0();
++            Gta2Port_InterpEnd();
++            pVid_FlipBuffers(gVidSys_7071D0);
++            sPortLastDrawMs = Time;
++        }
++#endif
+     }
+ 
+     if (gFpsCounter_7055D4)
+-- 
+2.53.0
+

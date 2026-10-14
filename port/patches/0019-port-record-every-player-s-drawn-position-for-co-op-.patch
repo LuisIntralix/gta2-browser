@@ -1,0 +1,53 @@
+From 984b7db602f78e4fd9f6b38326394303cfa3b80c Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 10:44:41 +1100
+Subject: [PATCH 19/23] port: record every player's drawn position for co-op
+ markers
+
+---
+ Source/port_interpolation.cpp | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Source/port_interpolation.cpp b/Source/port_interpolation.cpp
+index d97fe7a..5a68450 100644
+--- a/Source/port_interpolation.cpp
++++ b/Source/port_interpolation.cpp
+@@ -31,6 +31,7 @@ extern "C" {
+ s32 gGta2PortInterpolate = 1; // set from the shell
+ s32 gGta2PortDrawnCam[2];     // camera x, y (Fix16 raw) of the last draw (the shell's radar follows it)
+ s32 gGta2PortDrawnPlayer[3];  // player x, y (Fix16 raw) and rotation (Ang16) as last drawn
++s32 gGta2PortDrawnPlayers[6][4]; // every player (co-op, D20): drawn, x, y, rotation as last drawn
+ }
+ 
+ namespace
+@@ -243,6 +244,27 @@ void Gta2Port_InterpBegin(f32 t, bool extra)
+             }
+         }
+     }
++    // every player's drawn position, for the shell's co-op markers
++    for (u8 i = 0; i < 6; ++i)
++    {
++        gGta2PortDrawnPlayers[i][0] = 0;
++        Player* p = gGame_0x40_67E008 ? gGame_0x40_67E008->get_player_4219E0(i) : nullptr;
++        Ped* ped = p && p->field_8E_bInUse ? p->field_2C4_player_ped : nullptr;
++        if (!ped)
++        {
++            continue;
++        }
++        Car_BC* car = ped->get_car_416B60();
++        const Sprite* sp = car ? car->field_50_car_sprite
++                               : (ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : nullptr);
++        if (sp)
++        {
++            gGta2PortDrawnPlayers[i][0] = 1;
++            gGta2PortDrawnPlayers[i][1] = sp->field_14_xy.x.mValue;
++            gGta2PortDrawnPlayers[i][2] = sp->field_14_xy.y.mValue;
++            gGta2PortDrawnPlayers[i][3] = sp->field_0.rValue;
++        }
++    }
+     if (extra && gpMapRenderer_6F66E4)
+     {
+         gSavedAmbient = gpMapRenderer_6F66E4->field_0_ambient;
+-- 
+2.53.0
+

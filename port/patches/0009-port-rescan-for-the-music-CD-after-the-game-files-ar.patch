@@ -1,0 +1,58 @@
+From 760292984aac233e035029b68b0509e1d8584b3b Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 11:31:02 +1100
+Subject: [PATCH 09/23] port: rescan for the music CD after the game files are
+ mounted
+
+---
+ Source/port_static_init.cpp | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/Source/port_static_init.cpp b/Source/port_static_init.cpp
+index 28b95cd..1dff7b9 100644
+--- a/Source/port_static_init.cpp
++++ b/Source/port_static_init.cpp
+@@ -9,6 +9,7 @@
+ #include "fix16.hpp"
+ #include "map_0x370.hpp"
+ #include "sprite.hpp"
++#include "cSampleManager.hpp"
+ 
+ void Init_gmp_slopes_array();
+ void Init_trigonometry_tables();
+@@ -37,8 +38,32 @@ static void Init_InputRecorder()
+     gInputRecorder_67F8B0.VerifyAttractFilesExist_4CE650();
+ }
+ 
++// cSampleManager's constructor (a global, so it runs at module start-up, before
++// the shell has copied the game files in) looks for the music CD as
++// "<drive>:\GTAUDIO\1.wav". Repeat that scan now that the files are present;
++// the port maps drive C to data\GTAudio.
++static void RescanMusicDrive()
++{
++    gSampManager_6FFF00.field_55_bMusicLoaded = false;
++    for (u32 driveLetter = 'C'; driveLetter <= 'Z'; driveLetter++)
++    {
++        char_type path[80];
++        sprintf(gSampManager_6FFF00.field_5_str, "%c:\\GTAUDIO\\", driveLetter);
++        strcpy(path, gSampManager_6FFF00.field_5_str);
++        strcat(path, "1.wav");
++        if (FILE* hFile = fopen(path, "rb"))
++        {
++            fclose(hFile);
++            gSampManager_6FFF00.field_55_bMusicLoaded = true;
++            gSampManager_6FFF00.field_4_gtaAudioDriveLetter = static_cast<char_type>(driveLetter);
++            break;
++        }
++    }
++}
++
+ extern "C" void Gta2Port_StaticInit()
+ {
++    RescanMusicDrive();
+     InitMapObjectOverrides();
+     InitCodeObjectTemplates();
+     Init_gmp_slopes_array();
+-- 
+2.53.0
+

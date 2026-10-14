@@ -1,0 +1,20 @@
+LIBRARY dear_imgui.dll
+EXPORTS
+?InputText@ImGui@@YA_NPBDPADIHP6AHPAUImGuiTextEditCallbackData@@@ZPAX@Z=imgui_stub_zero
+?InputInt@ImGui@@YA_NPBDPAHHHH@Z=imgui_stub_zero
+?SliderInt@ImGui@@YA_NPBDPAHHH0@Z=imgui_stub_zero
+?Begin@ImGui@@YA_NPBDPA_NH@Z=imgui_stub_zero
+?Button@ImGui@@YA_NPBDABUImVec2@@@Z=imgui_stub_zero
+?Value@ImGui@@YAXPBDM0@Z=imgui_stub_zero
+?Value@ImGui@@YAXPBDI@Z=imgui_stub_zero
+?Combo@ImGui@@YA_NPBDPAH0H@Z=imgui_stub_zero
+?Value@ImGui@@YAXPBD_N@Z=imgui_stub_zero
+?End@ImGui@@YAXXZ=imgui_stub_zero
+?TreePop@ImGui@@YAXXZ=imgui_stub_zero
+?Value@ImGui@@YAXPBDH@Z=imgui_stub_zero
+?Checkbox@ImGui@@YA_NPBDPA_N@Z=imgui_stub_zero
+?Combo@ImGui@@YA_NPBDPAHPBQBDHH@Z=imgui_stub_zero
+?Text@ImGui@@YAXPBDZZ=imgui_stub_zero
+?GetIO@ImGui@@YAAAUImGuiIO@@XZ=imgui_stub_io
+?InputFloat@ImGui@@YA_NPBDPAMMMHH@Z=imgui_stub_zero
+?TreeNode@ImGui@@YA_NPBD@Z=imgui_stub_zero

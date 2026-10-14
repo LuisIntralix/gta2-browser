@@ -1,0 +1,97 @@
+From 7e0c232296e204df1f6efb657982b000270c4a8d Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 15:47:30 +1100
+Subject: [PATCH 14/23] port: HUD parts anchored to the widescreen edges;
+ Modern camera 20% smoother
+
+---
+ Source/Hud.cpp                | 25 +++++++++++++++++++++++++
+ Source/port_modern_camera.cpp | 12 +++++++-----
+ 2 files changed, 32 insertions(+), 5 deletions(-)
+
+diff --git a/Source/Hud.cpp b/Source/Hud.cpp
+index c3aa90e..165576b 100644
+--- a/Source/Hud.cpp
++++ b/Source/Hud.cpp
+@@ -3159,23 +3159,48 @@ void Hud_PauseScreen_2::DrawPause_5D63B0()
+     }
+ }
+ 
++#ifdef GTA2_PORT
++// Widescreen: each HUD part is laid out in the 640-wide 4:3 box; anchor it to the screen's left edge,
++// centre or right edge (port/render/frame.cpp). gGta2PortHudEdges = 0 keeps the whole HUD centred.
++extern "C" void Gta2Port_SetFrameLayout(s32 width, s32 hudOffsetX);
++extern "C" s32 gGta2PortHudEdges;
++static void PortHudAnchor(s32 side) // 0 left, 1 centre, 2 right
++{
++    const Camera_0xBC* pCam = gViewCamera_676978;
++    if (pCam)
++    {
++        Gta2Port_SetFrameLayout(pCam->field_68_screen_px_width, pCam->PortHudOffsetX() * (gGta2PortHudEdges ? side : 1));
++    }
++}
++#define PORT_HUD_ANCHOR(side) PortHudAnchor(side)
++#else
++#define PORT_HUD_ANCHOR(side)
++#endif
++
+ MATCH_FUNC(0x5d6860)
+ void Hud_2B00::DrawGui_5D6860()
+ {
+     if (!bSkip_user_67D506)
+     {
+         SetFullAmbient_5D6A70();
++        PORT_HUD_ANCHOR(2); // cash, lives, multiplier, weapon and ammo, power-up timers
+         field_1118_player_stats.DrawPlayerStats_5D5C80();
++        PORT_HUD_ANCHOR(1); // world-anchored and centred parts
+         field_110C_under_roof_arrow_marker.Draw_5CF910();
+         field_13C0_player_names.DrawPlayerNames_5CFE40();
+         field_1028_wanted_level.DrawWantedLevel_5D0110();
++        PORT_HUD_ANCHOR(0);
+         field_107C_gang_respect_bars.DrawGangRespectBars_5CFA70();
++        PORT_HUD_ANCHOR(2);
+         field_1108_health.DrawHealth_5D0260();
++        PORT_HUD_ANCHOR(1);
+         field_4C_zone_name.DrawZoneName_5D5900();
+         field_0_car_name.DrawCarName_5D4A10();
+         field_1080_pickup_text.Draw_5D5420();
+         field_DC_brief.DrawBrief_5D3B80();
++        PORT_HUD_ANCHOR(0);
+         field_620_pagers.DrawPagers_5D3040();
++        PORT_HUD_ANCHOR(1);
+         field_650_texts.Service_5D2010();
+         field_1F18_arrows.DrawArrows_5D0E90();
+         field_12F0_mp_message.Draw_5D56D0();
+diff --git a/Source/port_modern_camera.cpp b/Source/port_modern_camera.cpp
+index 88bec5d..079ff63 100644
+--- a/Source/port_modern_camera.cpp
++++ b/Source/port_modern_camera.cpp
+@@ -6,8 +6,8 @@
+ // around the threshold re-targets the height, so the view "pumps".
+ //
+ // The Modern camera filters the canonical height after each camera update:
+-//  - it rises towards a higher canonical height smoothly (about 1 s);
+-//  - it waits 1.5 s before following a lower one, so a brief brake or corner
++//  - it rises towards a higher canonical height smoothly (about 1.5 s);
++//  - it waits 1.8 s before following a lower one, so a brief brake or corner
+ //    changes nothing;
+ //  - changes smaller than a deadband are ignored;
+ //  - it never rises above the canonical height by more than a ceiling, and
+@@ -32,9 +32,11 @@ namespace
+ {
+ constexpr f32 kTick = 1.0f / 30.0f; // camera updates run once per game frame (30 per second)
+ constexpr f32 kDeadband = 0.3f;     // blocks of height
+-constexpr f32 kHoldSeconds = 1.5f;  // wait before following a lower height
+-constexpr f32 kOmegaUp = 4.0f;      // critically damped: settles in about 1.2 s
+-constexpr f32 kOmegaDown = 2.5f;    // and about 1.9 s going down
++// Tuned 20% smoother than the first version at the user's request (13 October 2026):
++// hold 1.5 -> 1.8 s, response rates x0.8.
++constexpr f32 kHoldSeconds = 1.8f;  // wait before following a lower height
++constexpr f32 kOmegaUp = 3.2f;      // critically damped: settles in about 1.5 s
++constexpr f32 kOmegaDown = 2.0f;    // and about 2.4 s going down
+ constexpr f32 kMaxAbove = 3.0f;     // never more than this above the canonical height
+ constexpr f32 kSnap = 8.0f;         // larger jumps are camera cuts
+ constexpr f32 kMaxZ = 14.0f;        // the original's camera height limit (kMaxCamZ_676898)
+-- 
+2.53.0
+

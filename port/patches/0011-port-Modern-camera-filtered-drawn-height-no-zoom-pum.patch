@@ -1,0 +1,374 @@
+From 6a68a17e7173a4b6b6b4bca9fe86889a2df8d61e Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 12:02:38 +1100
+Subject: [PATCH 11/23] port: Modern camera (filtered drawn height, no zoom
+ pumping) and an activation margin that covers what is drawn
+
+---
+ Source/Camera.cpp             |  22 +++-
+ Source/Camera.hpp             |  25 +++--
+ Source/Game_0x40.cpp          |   9 ++
+ Source/SpriteGrid_400.cpp     |  24 +++--
+ Source/port_modern_camera.cpp | 185 ++++++++++++++++++++++++++++++++++
+ 5 files changed, 247 insertions(+), 18 deletions(-)
+ create mode 100644 Source/port_modern_camera.cpp
+
+diff --git a/Source/Camera.cpp b/Source/Camera.cpp
+index 506a5c5..75de08d 100644
+--- a/Source/Camera.cpp
++++ b/Source/Camera.cpp
+@@ -380,14 +380,25 @@ void Camera_0xBC::UpdateBoundaries_435B90()
+ #endif
+     field_60.y = Fix16(640) * field_98_cam_pos2.field_C_zoom;
+ 
+-    Fix16 v = (dword_676838 + field_98_cam_pos2.field_8_z) * (kOne_67681C / field_98_cam_pos2.field_C_zoom) * dword_67671C;
+-
+ #ifdef GTA2_PORT
++    // With the activation margin, the boundaries cover the drawn height as well as the canonical one.
++    Fix16 z = field_98_cam_pos2.field_8_z;
++    if (gGta2PortActivationMargin)
++    {
++        const Fix16 drawn = Gta2Port_PresentedCameraZ(this);
++        if (drawn > z)
++        {
++            z = drawn;
++        }
++    }
++    Fix16 v = (dword_676838 + z) * (kOne_67681C / field_98_cam_pos2.field_C_zoom) * dword_67671C;
+     const Fix16 v_y = v;
+-    if (gGta2PortWideActivation)
++    if (gGta2PortActivationMargin)
+     {
+-        v += PortWideExtraX();
++        v += PortWideExtraX(z);
+     }
++#else
++    Fix16 v = (dword_676838 + field_98_cam_pos2.field_8_z) * (kOne_67681C / field_98_cam_pos2.field_C_zoom) * dword_67671C;
+ #endif
+ 
+     field_78_boundaries_non_neg.field_0_left = field_98_cam_pos2.field_0_x - v;
+@@ -556,6 +567,9 @@ void Camera_0xBC::Update_435FF0()
+     {
+         Camera_0xBC::ApplyShake_436140();
+     }
++#ifdef GTA2_PORT
++    Gta2Port_ModernCameraTick(this);
++#endif
+     Camera_0xBC::UpdateBoundaries_435B90();
+     field_0_cam_pos_tgt1 = field_10_cam_pos_tgt2;
+ }
+diff --git a/Source/Camera.hpp b/Source/Camera.hpp
+index 4520059..b26bb68 100644
+--- a/Source/Camera.hpp
++++ b/Source/Camera.hpp
+@@ -34,10 +34,11 @@ struct WorldRect
+ };
+ 
+ #ifdef GTA2_PORT
+-// Presentation activation margin (D07/D17): when set, a wide screen widens the camera boundaries the
+-// simulation uses (spawning, on-screen and despawn checks) to the visible width, so nothing pops in
+-// or out in view. A recorded gameplay deviation; 0 keeps the canonical 4:3 rectangle. Port layer.
+-extern "C" s32 gGta2PortWideActivation;
++// Presentation activation margin (D07/D17): when set, the camera boundaries the simulation uses
++// (spawning, on-screen and despawn checks) cover what is actually drawn - the extra width of a wide
++// screen and the Modern camera's height - so nothing pops in or out in view. A recorded gameplay
++// deviation; it does nothing with a 4:3 Classic view. Defined in the port layer.
++extern "C" s32 gGta2PortActivationMargin;
+ #endif
+ 
+ class Camera_0xBC
+@@ -86,15 +87,16 @@ class Camera_0xBC
+     {
+         return (field_68_screen_px_width - PortRefWidth()) / 2;
+     }
+-    // World width (each side, at ground level) that a wide screen shows beyond the 4:3 view.
+-    Fix16 PortWideExtraX() const
++    // World width (each side, at ground level) that a wide screen shows beyond the 4:3 view, for a
++    // camera at height z.
++    Fix16 PortWideExtraX(Fix16 z) const
+     {
+         if (field_68_screen_px_width <= PortRefWidth() || field_98_cam_pos2.field_C_zoom <= Fix16(0))
+         {
+             return Fix16(0);
+         }
+-        return (field_98_cam_pos2.field_8_z + Fix16(8)) / field_98_cam_pos2.field_C_zoom *
+-            (field_68_screen_px_width - PortRefWidth()) / PortRefWidth() / 2;
++        return (z + Fix16(8)) / field_98_cam_pos2.field_C_zoom * (field_68_screen_px_width - PortRefWidth()) /
++            PortRefWidth() / 2;
+     }
+ #endif
+     EXPORT Camera_0xBC(); // 4368E0
+@@ -237,4 +239,11 @@ GTA2_ASSERT_SIZEOF_ALWAYS(Camera_0xBC, 0xBC)
+ 
+ EXTERN_GLOBAL(Camera_0xBC*, gViewCamera_676978);
+ 
++#ifdef GTA2_PORT
++// port_modern_camera.cpp (D17)
++extern "C" s32 gGta2PortCameraMode;
++void Gta2Port_ModernCameraTick(Camera_0xBC* cam);
++Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam);
++#endif
++
+ extern inline Fix16 Max_41E130(Fix16 a1, Fix16 a2);
+diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
+index 14342ec..8f4c374 100644
+--- a/Source/Game_0x40.cpp
++++ b/Source/Game_0x40.cpp
+@@ -385,6 +385,12 @@ void Game_0x40::Draw_4B92D0()
+ {
+     gViewCamera_676978 = &field_1C_view_player->field_14C_view_camera;
+ 
++#ifdef GTA2_PORT
++    // Draw from the Modern camera's height (D17); the simulated height is restored below.
++    const Fix16 simulated_cam_z = gViewCamera_676978->field_98_cam_pos2.field_8_z;
++    gViewCamera_676978->field_98_cam_pos2.field_8_z = Gta2Port_PresentedCameraZ(gViewCamera_676978);
++#endif
++
+     gpMapRenderer_6F66E4->ClearDrawnTileCount_4F6A10();
+     gSprite_8_703820->ResetDrawnSpriteCount_5A5860();
+     gSpriteRenderer_67B580->ResetAll_4954F0();
+@@ -420,6 +426,9 @@ void Game_0x40::Draw_4B92D0()
+ 
+     pgbh_EndScene();
+     FreeSurface_5D7DC0();
++#ifdef GTA2_PORT
++    gViewCamera_676978->field_98_cam_pos2.field_8_z = simulated_cam_z;
++#endif
+ }
+ 
+ MATCH_FUNC(0x4B9380)
+diff --git a/Source/SpriteGrid_400.cpp b/Source/SpriteGrid_400.cpp
+index 3fce54e..117ab9c 100644
+--- a/Source/SpriteGrid_400.cpp
++++ b/Source/SpriteGrid_400.cpp
+@@ -63,18 +63,30 @@ MATCH_FUNC(0x477a40)
+ void SpriteGrid_400::DrawSpritesClipped_477A40()
+ {
+ #ifdef GTA2_PORT
+-    // Widescreen: existing sprites are drawn in the extra width. Without the activation margin only
+-    // this draw pass widens; the boundaries that drive spawning and activation keep their 4:3 size.
++    // Existing sprites are drawn wherever the view reaches (wide screen, Modern camera height), even
++    // where that is outside the boundaries that drive spawning and activation. Called while
++    // Game_0x40::Draw has the drawn height swapped in.
+     const Camera_0xBC* pCam = gViewCamera_676978;
+-    const Fix16 extra = gGta2PortWideActivation ? Fix16(0) : pCam->PortWideExtraX();
+-    const s32 left = Clamp((pCam->field_78_boundaries_non_neg.field_0_left - kFpOne_679084 - extra).ToInt(), 0, 255);
+-    const s32 right_val = Clamp((kFpOneAndHalf_678F80 + pCam->field_78_boundaries_non_neg.field_4_right + extra).ToInt(), 0, 255);
++    const Fix16 cam_x = pCam->field_98_cam_pos2.field_0_x;
++    const Fix16 cam_y = pCam->field_98_cam_pos2.field_4_y;
++    const Fix16 depth = (pCam->field_98_cam_pos2.field_8_z + Fix16(8)) / pCam->field_98_cam_pos2.field_C_zoom;
++    const Fix16 vis_x = depth / 2 + pCam->PortWideExtraX(pCam->field_98_cam_pos2.field_8_z);
++    const Fix16 vis_y = depth * Fix16(0x3000, 0) / 2; // 3/4: the 4:3 view's height
++    const WorldRect& b = pCam->field_78_boundaries_non_neg;
++    const Fix16 b_left = b.field_0_left < cam_x - vis_x ? b.field_0_left : cam_x - vis_x;
++    const Fix16 b_right = b.field_4_right > cam_x + vis_x ? b.field_4_right : cam_x + vis_x;
++    const Fix16 b_top = b.field_8_top < cam_y - vis_y ? b.field_8_top : cam_y - vis_y;
++    const Fix16 b_bottom = b.field_C_bottom > cam_y + vis_y ? b.field_C_bottom : cam_y + vis_y;
++    const s32 left = Clamp((b_left - kFpOne_679084).ToInt(), 0, 255);
++    const s32 right_val = Clamp((kFpOneAndHalf_678F80 + b_right).ToInt(), 0, 255);
++    const s32 top_val = Clamp((b_top - kFpOne_679084).ToInt(), 0, 255);
++    const s32 bottom_val = Clamp((kFpOneAndHalf_678F80 + b_bottom).ToInt(), 0, 255);
+ #else
+     const s32 left = Clamp((gViewCamera_676978->field_78_boundaries_non_neg.field_0_left - kFpOne_679084).ToInt(), 0, 255);
+     const s32 right_val = Clamp((kFpOneAndHalf_678F80 + gViewCamera_676978->field_78_boundaries_non_neg.field_4_right).ToInt(), 0, 255);
+-#endif
+     const s32 top_val = Clamp((gViewCamera_676978->field_78_boundaries_non_neg.field_8_top - kFpOne_679084).ToInt(), 0, 255);
+     const s32 bottom_val = Clamp((kFpOneAndHalf_678F80 + gViewCamera_676978->field_78_boundaries_non_neg.field_C_bottom).ToInt(), 0, 255);
++#endif
+ 
+     AddToDrawList_478240(left, right_val, top_val, bottom_val);
+ }
+diff --git a/Source/port_modern_camera.cpp b/Source/port_modern_camera.cpp
+new file mode 100644
+index 0000000..88bec5d
+--- /dev/null
++++ b/Source/port_modern_camera.cpp
+@@ -0,0 +1,185 @@
++// Browser port: the Modern camera (decision D17), presentation only.
++//
++// The original sets the camera height target to the car's height plus its raw
++// speed whenever the speed is above 1.5 (Camera_0xBC::ApplyCarVelocityCameraOffset_436200),
++// rises fast and falls slowly. Every corner, brake, bump or speed wobble
++// around the threshold re-targets the height, so the view "pumps".
++//
++// The Modern camera filters the canonical height after each camera update:
++//  - it rises towards a higher canonical height smoothly (about 1 s);
++//  - it waits 1.5 s before following a lower one, so a brief brake or corner
++//    changes nothing;
++//  - changes smaller than a deadband are ignored;
++//  - it never rises above the canonical height by more than a ceiling, and
++//    snaps on camera cuts (scripted cameras, teleports).
++// Only the drawn height changes (Game_0x40::Draw swaps it in and restores it).
++// The camera state the game simulates with is never written. When the
++// activation margin is on, the camera boundaries cover the higher of the two
++// heights so nothing spawns or despawns in view (Camera_0xBC::UpdateBoundaries_435B90).
++//
++// Height is filtered per camera update (game ticks), with one state per
++// updated camera so co-op players each get their own.
++#include "Camera.hpp"
++
++#include <math.h>
++
++extern "C" {
++s32 gGta2PortCameraMode = 1;       // 0 = Classic (original), 1 = Modern
++f32 gGta2PortCameraHeightBias = 0; // Modern: added to the drawn height (blocks); options "zoom bias"
++}
++
++namespace
++{
++constexpr f32 kTick = 1.0f / 30.0f; // camera updates run once per game frame (30 per second)
++constexpr f32 kDeadband = 0.3f;     // blocks of height
++constexpr f32 kHoldSeconds = 1.5f;  // wait before following a lower height
++constexpr f32 kOmegaUp = 4.0f;      // critically damped: settles in about 1.2 s
++constexpr f32 kOmegaDown = 2.5f;    // and about 1.9 s going down
++constexpr f32 kMaxAbove = 3.0f;     // never more than this above the canonical height
++constexpr f32 kSnap = 8.0f;         // larger jumps are camera cuts
++constexpr f32 kMaxZ = 14.0f;        // the original's camera height limit (kMaxCamZ_676898)
++
++enum Track : u8
++{
++    kHold,
++    kUp,
++    kDown
++};
++
++struct ModernState
++{
++    const Camera_0xBC* cam;
++    CameraPos canonical; // field_98 after the last update, to recognise copies of this camera
++    f32 z, v, below;
++    Track track;
++    u32 lastUse;
++};
++
++ModernState gStates[16];
++u32 gUseClock = 0;
++
++ModernState* Find(const Camera_0xBC* cam, bool create)
++{
++    ModernState* free = nullptr;
++    for (ModernState& s : gStates)
++    {
++        if (s.cam == cam)
++        {
++            return &s;
++        }
++        if (!free || s.lastUse < free->lastUse)
++        {
++            free = &s;
++        }
++    }
++    if (!create)
++    {
++        return nullptr;
++    }
++    *free = ModernState();
++    free->cam = cam;
++    return free;
++}
++
++bool SamePos(const CameraPos& a, const CameraPos& b)
++{
++    return a.field_0_x == b.field_0_x && a.field_4_y == b.field_4_y && a.field_8_z == b.field_8_z &&
++        a.field_C_zoom == b.field_C_zoom;
++}
++
++void Step(ModernState& s, f32 c)
++{
++    const f32 diff = c - s.z;
++    if (diff > kDeadband)
++    {
++        s.track = kUp;
++        s.below = 0;
++    }
++    else if (diff < -kDeadband)
++    {
++        s.below += kTick;
++        if (s.below >= kHoldSeconds || -diff > kMaxAbove)
++        {
++            s.track = kDown;
++        }
++        else if (s.track == kUp)
++        {
++            s.track = kHold;
++        }
++    }
++    else
++    {
++        s.below = 0;
++        if ((s.track == kUp && diff <= 0) || (s.track == kDown && diff >= 0))
++        {
++            s.track = kHold;
++        }
++    }
++
++    f32 a;
++    if (s.track == kHold)
++    {
++        a = -2.0f * kOmegaUp * s.v; // damp to a stop where it is
++    }
++    else
++    {
++        const f32 w = s.track == kUp ? kOmegaUp : kOmegaDown;
++        a = w * w * diff - 2.0f * w * s.v;
++    }
++    s.v += a * kTick;
++    s.z += s.v * kTick;
++
++    if (s.z > c + kMaxAbove)
++    {
++        s.z = c + kMaxAbove;
++        s.v = 0;
++    }
++    if (s.z > kMaxZ && c <= kMaxZ)
++    {
++        s.z = kMaxZ;
++        s.v = 0;
++    }
++}
++} // namespace
++
++// Called at the end of each camera update, before its boundaries are computed.
++void Gta2Port_ModernCameraTick(Camera_0xBC* cam)
++{
++    ModernState* s = Find(cam, true);
++    s->lastUse = ++gUseClock;
++    const f32 c = cam->field_98_cam_pos2.field_8_z.ToFloat();
++    const bool cut = cam->field_3C_followed_ped_id != 1; // scripted or direct camera
++    if (!gGta2PortCameraMode || cut || s->lastUse == 1 || s->canonical.field_C_zoom == Fix16(0) || fabsf(c - s->z) > kSnap)
++    {
++        s->z = c;
++        s->v = 0;
++        s->below = 0;
++        s->track = kHold;
++    }
++    else
++    {
++        Step(*s, c);
++    }
++    s->canonical = cam->field_98_cam_pos2;
++}
++
++// The height the camera is drawn from: Modern's filtered height (plus the
++// player's bias) for a camera that is, or is a copy of, an updated camera.
++Fix16 Gta2Port_PresentedCameraZ(const Camera_0xBC* cam)
++{
++    const Fix16 canonical = cam->field_98_cam_pos2.field_8_z;
++    if (!gGta2PortCameraMode)
++    {
++        return canonical;
++    }
++    for (const ModernState& s : gStates)
++    {
++        if (s.cam && SamePos(s.canonical, cam->field_98_cam_pos2))
++        {
++            f32 z = s.z + gGta2PortCameraHeightBias;
++            z = z < 1.0f ? 1.0f : z > kMaxZ + 2.0f ? kMaxZ + 2.0f : z;
++            return Fix16(z);
++        }
++    }
++    return canonical;
++}
+-- 
+2.53.0
+

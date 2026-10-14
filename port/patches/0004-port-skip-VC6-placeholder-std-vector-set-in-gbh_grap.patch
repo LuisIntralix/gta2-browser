@@ -1,0 +1,26 @@
+From d22cd66e84c2a843faca0dd41b040f90c3bcd842 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:13:27 +1100
+Subject: [PATCH 04/23] port: skip VC6 placeholder std::vector/set in
+ gbh_graphics.hpp
+
+---
+ Source/gbh_graphics.hpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/gbh_graphics.hpp b/Source/gbh_graphics.hpp
+index b558ece..54217bb 100644
+--- a/Source/gbh_graphics.hpp
++++ b/Source/gbh_graphics.hpp
+@@ -6,7 +6,7 @@
+ // and with it VC6 drops the EH frame of destructors that delete through an inline destructor
+ // (Door_4D4::~Door_4D4). The original TUs had no STL there, so unless a TU already has <set>/<vector>, their
+ // include guards are set and the two members get placeholder types.
+-#if !defined(_SET_) && !defined(_VECTOR_)
++#if !defined(GTA2_PORT) && !defined(_SET_) && !defined(_VECTOR_) // port: real STL, no VC6 placeholders
+ #define _SET_
+ #define _VECTOR_
+ namespace std
+-- 
+2.53.0
+

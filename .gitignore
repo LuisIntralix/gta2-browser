@@ -1,0 +1,15 @@
+# Project-local installs (kept inside the workspace on purpose)
+node_modules/
+
+# npm temporary caches
+.npm-cache/
+
+# Local originals, audit checkouts, SDKs, and build products
+downloads/
+game/
+research/
+build/
+
+# Generated game packs, captures, converted media and dumps (never committed)
+*.gta2pack
+*.gta2save

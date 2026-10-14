@@ -1,0 +1,29 @@
+# GTA2 game server on the shared droplet (D21). Lives in /opt/gta2/ with a
+# chmod 600 .env next to it (GTA2_PASSWORD, PUBLIC_URL). Reached only through
+# the shared Caddy on the external `edge` network: no published ports.
+name: gta2
+
+services:
+  app:
+    image: ghcr.io/m1stermo/gta2-server:latest
+    container_name: gta2-app
+    env_file: .env
+    volumes:
+      - ./data/web:/srv/web:ro
+      - ./data/game:/srv/game:ro
+      - ./data/db:/srv/db
+    networks:
+      edge:
+        aliases: [gta2-app]
+    mem_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  edge:
+    external: true
+    name: edge

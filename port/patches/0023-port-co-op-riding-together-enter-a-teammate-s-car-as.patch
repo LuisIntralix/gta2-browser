@@ -1,0 +1,91 @@
+From 16581184d6dfc688e2b6f1089309293f49739884 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 13:14:32 +1100
+Subject: [PATCH 23/23] port: co-op riding together (enter a teammate's car as
+ a passenger)
+
+---
+ Source/Player.cpp    | 16 ++++++++++++++--
+ Source/port_coop.cpp | 18 ++++++++++++++++++
+ Source/port_coop.hpp |  5 +++++
+ 3 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/Source/Player.cpp b/Source/Player.cpp
+index b1cd020..f6ac173 100644
+--- a/Source/Player.cpp
++++ b/Source/Player.cpp
+@@ -36,6 +36,7 @@
+ #include <DINPUT.H>
+ 
+ #ifdef GTA2_PORT
++#include "port_coop.hpp"
+ extern "C" s32 gGta2PortWasted[6]; // port_coop.cpp
+ extern "C" s32 gGta2PortBusted[6];
+ #endif
+@@ -1390,8 +1391,19 @@ void Player::HandleControls_5668D0(Ped* pPed)
+                     }
+ 
+                     pPed->SetTargetObjectiveCar(pCar);
+-                    pPed->set_enter_car_as_passenger_4039B0(0);
+-                    pPed->set_target_car_door_403A70(0);
++#ifdef GTA2_PORT
++                    // co-op: a teammate's car: get in as a passenger (the taxi customers' way in), not a carjack
++                    if (Gta2Port_CanRideWith(pPed, pCar->field_54_driver))
++                    {
++                        pPed->set_enter_car_as_passenger_4039B0(1);
++                        pPed->set_target_car_door_403A70(1);
++                    }
++                    else
++#endif
++                    {
++                        pPed->set_enter_car_as_passenger_4039B0(0);
++                        pPed->set_target_car_door_403A70(0);
++                    }
+                 }
+             }
+         }
+diff --git a/Source/port_coop.cpp b/Source/port_coop.cpp
+index 213e596..ac2188f 100644
+--- a/Source/port_coop.cpp
++++ b/Source/port_coop.cpp
+@@ -147,3 +147,21 @@ void Gta2Port_CoopTick()
+         }
+     }
+ }
++
++extern "C" s32 gGta2PortRideTogether = 0;
++
++bool Gta2Port_CanRideWith(Ped* pPed, Ped* pDriver)
++{
++    if (!gGta2PortRideTogether || !bStartNetworkGame_7081F0 || !pPed || !pDriver || pPed == pDriver ||
++        !pPed->field_15C_player || !pDriver->field_15C_player)
++    {
++        return false;
++    }
++    if (gGta2PortRideTogether == 1)
++    {
++        return true;
++    }
++    const s32 a = gGta2PortTeam[pPed->field_15C_player->get_idx_4219D0() % 6];
++    const s32 b = gGta2PortTeam[pDriver->field_15C_player->get_idx_4219D0() % 6];
++    return a >= 0 && a == b;
++}
+diff --git a/Source/port_coop.hpp b/Source/port_coop.hpp
+index 4049ad3..e4e1a08 100644
+--- a/Source/port_coop.hpp
++++ b/Source/port_coop.hpp
+@@ -27,6 +27,11 @@ extern "C" s32 gGta2PortFriendlyFire; // 1: players can hurt each other (the ori
+ extern "C" s32 gGta2PortTeam[6];
+ extern "C" s32 gGta2PortSide[6];
+ 
++// Riding together (co-op): 0 = never, 1 = with any player (free roam), 2 = with your crew (Gang Wars).
++// Pressing enter at a car a teammate is driving gets you in as a passenger instead of carjacking.
++extern "C" s32 gGta2PortRideTogether;
++bool Gta2Port_CanRideWith(Ped* pPed, Ped* pDriver);
++
+ // Once per game tick of a network game (winmain.cpp): applies the gang sides on the first tick
+ // (respect +100 with your side's gang, -100 with the other street gangs).
+ void Gta2Port_CoopTick();
+-- 
+2.53.0
+

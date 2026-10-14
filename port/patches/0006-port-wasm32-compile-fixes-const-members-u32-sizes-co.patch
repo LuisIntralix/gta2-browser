@@ -1,0 +1,787 @@
+From b6cf1e55bc495824f3b15babc044fefaac7b2023 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:19:53 +1100
+Subject: [PATCH 06/23] port: wasm32 compile fixes (const members, u32 sizes,
+ console error log, C++ for inline asm, version probes)
+
+---
+ Source/CarInfo_808.cpp          |  2 +-
+ Source/CarPhysics_B0.cpp        |  6 ++---
+ Source/Fix16_Point.cpp          |  8 +++---
+ Source/Fix16_Point.hpp          | 18 ++++++-------
+ Source/InputRecorder_67F8B0.cpp |  4 +--
+ Source/Object_5C.cpp            |  4 +--
+ Source/Object_5C.hpp            |  4 +--
+ Source/PlyDat_2BC0.cpp          |  4 +--
+ Source/ScriptManager_C1EA8.cpp  | 14 +++++-----
+ Source/SpriteRenderer_1C.cpp    |  7 +++++
+ Source/ang16.hpp                | 26 +++++++++----------
+ Source/error.cpp                | 16 +++++++++++-
+ Source/error.hpp                |  5 +++-
+ Source/file.cpp                 |  8 +++---
+ Source/file.hpp                 |  8 +++---
+ Source/fix16.cpp                |  2 +-
+ Source/fix16.hpp                |  8 +++---
+ Source/gtx_0x106C.cpp           | 45 +++++++++++++++++++++++++++++++++
+ Source/map_0x370.cpp            |  3 ++-
+ Source/winmain.cpp              | 12 +++++++++
+ 20 files changed, 143 insertions(+), 61 deletions(-)
+
+diff --git a/Source/CarInfo_808.cpp b/Source/CarInfo_808.cpp
+index 1502a0c..6c87bb1 100644
+--- a/Source/CarInfo_808.cpp
++++ b/Source/CarInfo_808.cpp
+@@ -625,7 +625,7 @@ void CarInfo_808::LoadModelPhysics_4546D0()
+ {
+     u32 number_of_cars = gGtx_0x106C_703DD4->get_number_of_cars();
+     u32 local_1c;
+-    size_t file_size;
++    u32 file_size;
+     void* file_content = File::ReadFileToBuffer_4A6C80(file_name_677EC4, &file_size);
+ 
+     field_804_raw_data = new ModelPhysics_48[number_of_cars];
+diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
+index ee7a6ba..5dbd93e 100644
+--- a/Source/CarPhysics_B0.cpp
++++ b/Source/CarPhysics_B0.cpp
+@@ -21,7 +21,7 @@
+ 
+ // Forward declarations: the functions below are in address order
+ EXPORT s32 __stdcall get_skid_obj_type_55D490(s32 surface, Fix16 box_idx);
+-static inline Fix16 __stdcall DotProductOOL_49E500(Fix16_Point& Vector1, Fix16_Point& Vector2);
++static inline Fix16 __stdcall DotProductOOL_49E500(const Fix16_Point& Vector1, Fix16_Point& Vector2);
+ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value);
+ EXPORT Fix16 __stdcall DotProduct_560680(const Fix16_Point& Vector1, const Fix16_Point& Vector2);
+ 
+@@ -2310,7 +2310,7 @@ void CarPhysics_B0::ApplyForceAndIntegrate_55F7A0(Fix16_Point* a2, Fix16_Point a
+ // GetLength_41E260 as inlined into ApplyImpactForcesAndDamage_55FA60: both Abs are called out of line
+ // (Abs_436A50) although the first multiply is inlined, which the plain inline can't give (Abs and operator*
+ // have the same front-end size, 57).
+-static inline Fix16 GetLength_AbsOutOfLine_41E260(Fix16_Point& p)
++static inline Fix16 GetLength_AbsOutOfLine_41E260(const Fix16_Point& p)
+ {
+     if (p.x == FIX16_POINT_ZERO)
+     {
+@@ -2439,7 +2439,7 @@ static inline Fix16 __stdcall DotProductInlined_49E500(Fix16_Point& Vector1, Fix
+ }
+ 
+ // DotProductInlined_49E500 with the out-of-line Fix16 operator copies
+-static inline Fix16 __stdcall DotProductOOL_49E500(Fix16_Point& Vector1, Fix16_Point& Vector2)
++static inline Fix16 __stdcall DotProductOOL_49E500(const Fix16_Point& Vector1, Fix16_Point& Vector2)
+ {
+     return Vector1.x.Multiply_408680(Vector2.x).Add_408660(Vector1.y.Multiply_408680(Vector2.y));
+ }
+diff --git a/Source/Fix16_Point.cpp b/Source/Fix16_Point.cpp
+index 38533bb..99ae237 100644
+--- a/Source/Fix16_Point.cpp
++++ b/Source/Fix16_Point.cpp
+@@ -10,7 +10,7 @@ Fix16_Point Fix16_Point::Add_40AC50(const Fix16_Point& in)
+ 
+ // The out-of-line copy of the inline operator-
+ MATCH_FUNC(0x40AC80)
+-Fix16_Point Fix16_Point::Sub_40AC80(const Fix16_Point& rhs)
++Fix16_Point Fix16_Point::Sub_40AC80(const Fix16_Point& rhs) const
+ {
+     return Fix16_Point(x - rhs.x, y - rhs.y);
+ }
+@@ -29,7 +29,7 @@ Ang16 Fix16_Point::atan2_40ACD0()
+ 
+ // https://decomp.me/scratch/qQwG3
+ MATCH_FUNC(0x438FE0)
+-Fix16_Point Fix16_Point::Multiply_438FE0(const Fix16& in)
++Fix16_Point Fix16_Point::Multiply_438FE0(const Fix16& in) const
+ {
+     return Fix16_Point(x * in, y * in);
+ }
+@@ -50,7 +50,7 @@ Fix16_Point Fix16_Point::NormalizeSafe_442AD0()
+     }
+ }
+ 
+-Fix16_Point Fix16_Point::operator/(const Fix16& in)
++Fix16_Point Fix16_Point::operator/(const Fix16& in) const
+ {
+     return Fix16_Point(x / in, y / in);
+ }
+@@ -86,7 +86,7 @@ Fix16 Fix16_Point::GetLength_453590()
+ }
+ 
+ MATCH_FUNC(0x55F9E0)
+-Fix16_Point Fix16_Point::operator/(const s32& a3)
++Fix16_Point Fix16_Point::operator/(const s32& a3) const
+ {
+     return Fix16_Point(x / a3, y / a3);
+ }
+diff --git a/Source/Fix16_Point.hpp b/Source/Fix16_Point.hpp
+index 2b1c186..2543888 100644
+--- a/Source/Fix16_Point.hpp
++++ b/Source/Fix16_Point.hpp
+@@ -118,7 +118,7 @@ class Fix16_Point
+     }
+ 
+     // But also 0x40ACD0 non inlined in 10.5
+-    Ang16 atan2_40F790()
++    Ang16 atan2_40F790() const
+     {
+         return Fix16::atan2_fixed_405320(y, x);
+     }
+@@ -128,7 +128,7 @@ class Fix16_Point
+     // 9.6f 0x41E260; the out-of-line copy is GetLength_453590. The nested if/else (front-end size 162, the
+     // else-if chain is 160) gives the original's cut-offs in Crane_15C::ComputeHookPolar_47F6C0 with
+     // SquareRoot at 48; matched functions allow 159..162.
+-    inline Fix16 GetLength_41E260()
++    inline Fix16 GetLength_41E260() const
+     {
+         if (x == FIX16_POINT_ZERO)
+         {
+@@ -279,7 +279,7 @@ class Fix16_Point
+     // Out-of-line copy of RotateByAngle_40F6B0, emitted in CarPhysics_B0.cpp
+     EXPORT void RotateVelocity_562C20(const Ang16& angle);
+ 
+-    EXPORT Fix16_Point Multiply_438FE0(const Fix16& a1);
++    EXPORT Fix16_Point Multiply_438FE0(const Fix16& a1) const;
+     EXPORT Fix16_Point Divide_442CB0(const Fix16& a1);
+ 
+     // Divide_442CB0 as a nothrow inline (see DivideInl_55F9E0; CarPhysics_B0::HandleObjectCollision_5606C0,
+@@ -374,13 +374,13 @@ class Fix16_Point
+     }
+ 
+     // MATCH_FUNC(0x40AC50)
+-    Fix16_Point operator+(const Fix16_Point& in)
++    Fix16_Point operator+(const Fix16_Point& in) const
+     {
+         return Fix16_Point(x + in.x, y + in.y);
+     }
+ 
+     // MATCH_FUNC(0x40AC80)
+-    Fix16_Point operator-(const Fix16_Point& rhs)
++    Fix16_Point operator-(const Fix16_Point& rhs) const
+     {
+         return Fix16_Point(x - rhs.x, y - rhs.y);
+     }
+@@ -388,7 +388,7 @@ class Fix16_Point
+     // The out-of-line copy of the inline operator-. Called by name where the original keeps an EH state
+     // for temporaries around the call (Crane_15C::HookPickupCar_47EF80, ComputeHookPolar_47F6C0); the
+     // inline operator- called out of line gets none (CarPhysics_B0::HandleCarCollision_55FF20)
+-    EXPORT Fix16_Point Sub_40AC80(const Fix16_Point& rhs);
++    EXPORT Fix16_Point Sub_40AC80(const Fix16_Point& rhs) const;
+ 
+     // operator+/operator- with their bodies defined at the end of Car_BC.cpp (HandleCarHitByObject_43F130)
+     inline Fix16_Point AddLate_40AC50(const Fix16_Point& in);
+@@ -513,7 +513,7 @@ class Fix16_Point
+         }
+     }
+ 
+-    Fix16_Point operator*(const Fix16& in)
++    Fix16_Point operator*(const Fix16& in) const
+     {
+         return Fix16_Point(x * in, y * in);
+     }
+@@ -526,7 +526,7 @@ class Fix16_Point
+     EXPORT Fix16_Point MultBy_442C80(const s32& factor);
+ 
+     // 10.0 0x442CB0
+-    EXPORT Fix16_Point operator/(const Fix16& in);
++    EXPORT Fix16_Point operator/(const Fix16& in) const;
+ 
+     // Unused (ApplyExplosionImpulse_443710 calls GetLength_41E260 now), kept for the same reason as
+     // GetLength_no_sqrt_inline
+@@ -618,7 +618,7 @@ class Fix16_Point
+         y = 0;
+     }
+ 
+-    EXPORT Fix16_Point operator/(const s32& a3);
++    EXPORT Fix16_Point operator/(const s32& a3) const;
+ 
+     // operator/ 0x55F9E0 as a nothrow inline that VC6 still calls out of line: the original sets no EH
+     // state for the temporaries that live across this call (CarPhysics_B0::HandleCarCollision_55FF20,
+diff --git a/Source/InputRecorder_67F8B0.cpp b/Source/InputRecorder_67F8B0.cpp
+index 802ae85..4e550b2 100644
+--- a/Source/InputRecorder_67F8B0.cpp
++++ b/Source/InputRecorder_67F8B0.cpp
+@@ -679,7 +679,7 @@ void InputRecorder_67F8B0::SaveReplay_4CDED0()
+     if (bConstant_replay_save_67D5C4 != 1 && bDo_release_replay_67D4EB && field_38_replay_state != Disabled_2 && field_75340_rec_buf_idx > 0 &&
+         !RecOrPlayBackState_4CEDF0())
+     {
+-        size_t len = sizeof(InputRecord_C) * field_75340_rec_buf_idx;
++        u32 len = sizeof(InputRecord_C) * field_75340_rec_buf_idx;
+         File::AppendBufferToFile_4A6F50("test\\replay.rep", field_3C_rec_buff, &len);
+     }
+ }
+@@ -716,7 +716,7 @@ void InputRecorder_67F8B0::AppendReplayHeader_4CDF70()
+ {
+     ReplayHeader_10C header;
+     DWORD computer_name_size;
+-    size_t header_size;
++    u32 header_size;
+ 
+     memset(&header, 0, sizeof(header));
+     computer_name_size = 29;
+diff --git a/Source/Object_5C.cpp b/Source/Object_5C.cpp
+index 4307c2a..2026fa4 100644
+--- a/Source/Object_5C.cpp
++++ b/Source/Object_5C.cpp
+@@ -342,7 +342,7 @@ char_type Object_2C::SelectCollisionSprite_522460(Sprite* a2)
+ }
+ 
+ MATCH_FUNC(0x5224e0)
+-void Object_2C::SetMovementVector_5224E0(Fix16_Point& speed)
++void Object_2C::SetMovementVector_5224E0(const Fix16_Point& speed)
+ {
+     Fix16_Point v5;
+     if (field_10_obj_3c)
+@@ -2282,7 +2282,7 @@ void Object_2C::ReleaseSubObjects_527F10()
+ 
+ // 9.6f 0x4847D0
+ MATCH_FUNC(0x528130)
+-void Object_2C::NewObj3C_528130(Fix16_Point& speed)
++void Object_2C::NewObj3C_528130(const Fix16_Point& speed)
+ {
+     Object_3C* pNewObj = gObject_3C_Pool_6F8F7C->Allocate();
+ 
+diff --git a/Source/Object_5C.hpp b/Source/Object_5C.hpp
+index ccf9d48..37cc7ea 100644
+--- a/Source/Object_5C.hpp
++++ b/Source/Object_5C.hpp
+@@ -45,7 +45,7 @@ class Object_2C
+     EXPORT bool ShouldStopAtTrafficLight_525290(Sprite* pSprite);
+     EXPORT bool ShouldCollideWithSprite_522430(Sprite* a2);
+     EXPORT char_type SelectCollisionSprite_522460(Sprite* a2);
+-    EXPORT void SetMovementVector_5224E0(Fix16_Point& speed);
++    EXPORT void SetMovementVector_5224E0(const Fix16_Point& speed);
+     EXPORT void SetMovementVectorWithRandomState_522640(const Fix16_Point& a2);
+     EXPORT void SetConveyorPush_5226A0(char_type conveyor_speed);
+     EXPORT void ResolveCollisionWithObject_522710(Object_2C* a2, Fix16_Point* a3);
+@@ -81,7 +81,7 @@ class Object_2C
+     EXPORT void AssignToBucket_527AE0();
+     EXPORT void RemoveFromCollisionBuckets_527D00();
+     EXPORT void ReleaseSubObjects_527F10();
+-    EXPORT void NewObj3C_528130(Fix16_Point& speed);
++    EXPORT void NewObj3C_528130(const Fix16_Point& speed);
+     EXPORT char_type HandleRotationStateTransition_528240(s32 a2, s32 a3);
+     EXPORT void TickObject_5283C0(s32 a2);
+     EXPORT char_type OnObjectTouched_5288B0(Sprite* a2);
+diff --git a/Source/PlyDat_2BC0.cpp b/Source/PlyDat_2BC0.cpp
+index 292fa4c..e19c9ee 100644
+--- a/Source/PlyDat_2BC0.cpp
++++ b/Source/PlyDat_2BC0.cpp
+@@ -407,7 +407,7 @@ MATCH_FUNC(0x56BA60)
+ void PlyDat_2BC0::SavePlySlotDat_56BA60(s16 slotIdx)
+ {
+     char_type FileName[356];
+-    size_t len;
++    u32 len;
+ 
+     GetPlySlotDatName_56B8A0(slotIdx, FileName);
+ 
+@@ -576,7 +576,7 @@ MATCH_FUNC(0x56BF20)
+ void PlyDat_2BC0::SaveHiScores_56BF20()
+ {
+     char_type FileName[256];
+-    size_t len;
++    u32 len;
+ 
+     GetHiScoreHscFileName_56BCF0(FileName);
+ 
+diff --git a/Source/ScriptManager_C1EA8.cpp b/Source/ScriptManager_C1EA8.cpp
+index 7e44912..f8e2247 100644
+--- a/Source/ScriptManager_C1EA8.cpp
++++ b/Source/ScriptManager_C1EA8.cpp
+@@ -217,12 +217,12 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
+     ScriptManager_C1EA8::SaveMapInfo_511D40();
+ 
+     {
+-        size_t writeLen = sizeof(SaveData_748);
++        u32 writeLen = sizeof(SaveData_748);
+         File::WriteBufferToFile_4A6E80(pFileName, &gGameSave_6F78C8, &writeLen); // gTurkishDelight_748_664590
+     }
+ 
+     {
+-        size_t writeLen = 4;
++        u32 writeLen = 4;
+         File::AppendBufferToFile_4A6F50(pFileName, &colBytes, &writeLen);
+         if (colBytes)
+         {
+@@ -231,7 +231,7 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
+     }
+ 
+     {
+-        size_t writeLen = 4;
++        u32 writeLen = 4;
+         File::AppendBufferToFile_4A6F50(pFileName, &blockInfoBytes, &writeLen);
+         if (blockInfoBytes)
+         {
+@@ -240,7 +240,7 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
+     }
+ 
+     {
+-        size_t writeLen = 4;
++        u32 writeLen = 4;
+         File::AppendBufferToFile_4A6F50(pFileName, &mapSubBytes, &writeLen);
+         if (mapSubBytes)
+         {
+@@ -252,9 +252,9 @@ void ScriptManager_C1EA8::SaveGame_511E10(char_type* pFileName)
+ MATCH_FUNC(0x511f80)
+ void ScriptManager_C1EA8::LoadSave_511F80(char_type* pFileName)
+ {
+-    size_t mapSubLen;
+-    size_t blockInfoLen;
+-    size_t colDataLen;
++    u32 mapSubLen;
++    u32 blockInfoLen;
++    u32 colDataLen;
+     u16** pColData;
+     gmp_block_info* pBlockInfo;
+     Map_sub* pMapSub;
+diff --git a/Source/SpriteRenderer_1C.cpp b/Source/SpriteRenderer_1C.cpp
+index 7896539..c620782 100644
+--- a/Source/SpriteRenderer_1C.cpp
++++ b/Source/SpriteRenderer_1C.cpp
+@@ -5,6 +5,9 @@
+ #include "sprite.hpp"
+ 
+ // Forward declarations: the functions below are in address order
++#if defined(GTA2_PORT)
++extern "C" unsigned long long gta2_port_rdtsc();
++#endif
+ EXPORT s32 get_rdtsc_5BEE90();
+ EXTERN_GLOBAL(u32, dword_705334);
+ 
+@@ -72,6 +75,9 @@ SpriteRenderer_1C::~SpriteRenderer_1C()
+ MATCH_FUNC(0x5BEE90)
+ EXPORT s32 get_rdtsc_5BEE90()
+ {
++#if defined(GTA2_PORT)
++    return static_cast<s32>(gta2_port_rdtsc());
++#else
+     // NOTE: Actually is inline assembly, surprisingly
+     unsigned __int64 t;
+     __asm
+@@ -87,6 +93,7 @@ EXPORT s32 get_rdtsc_5BEE90()
+         popad
+     }
+     return static_cast<s32>(t);
++#endif
+ }
+ 
+ // Converts a cycle count from get_rdtsc_5BEE90 for the profiler display (dword_705334 is the
+diff --git a/Source/ang16.hpp b/Source/ang16.hpp
+index 8fc7e88..4cb0902 100644
+--- a/Source/ang16.hpp
++++ b/Source/ang16.hpp
+@@ -10,27 +10,27 @@ class Ang16
+   public:
+     //   Ang16  and  Ang16
+     // 9.6f 0x40E670/0x41E0F0/0x40F4C0/0x40E690: setcc into a 32-bit register, so these return int, not bool
+-    s32 operator>(const Ang16& other)
++    s32 operator>(const Ang16& other) const
+     {
+         return rValue > other.rValue;
+     }
+ 
+-    s32 operator<(const Ang16& other)
++    s32 operator<(const Ang16& other) const
+     {
+         return rValue < other.rValue;
+     }
+ 
+-    s32 operator>=(const Ang16& other)
++    s32 operator>=(const Ang16& other) const
+     {
+         return rValue >= other.rValue;
+     }
+ 
+-    s32 operator<=(const Ang16& other)
++    s32 operator<=(const Ang16& other) const
+     {
+         return rValue <= other.rValue;
+     }
+ 
+-    s32 operator!=(const Ang16& other)
++    s32 operator!=(const Ang16& other) const
+     {
+         return rValue != other.rValue;
+     }
+@@ -58,19 +58,19 @@ class Ang16
+     }
+     */
+ 
+-    s32 operator==(const Ang16& other)
++    s32 operator==(const Ang16& other) const
+     {
+         return rValue == other.rValue;
+     }
+ 
+-    Ang16 operator*(const Ang16& other)
++    Ang16 operator*(const Ang16& other) const
+     {
+         return Ang16((Fix16(rValue) * Fix16(other.rValue)).ToInt());
+     }
+ 
+     // 9.6f 0x40E5A0
+     // https://decomp.me/scratch/Rc5ql
+-    Ang16 operator+(const Ang16& rhs)
++    Ang16 operator+(const Ang16& rhs) const
+     {
+         s16 value = rValue + rhs.rValue;
+         return Ang16(value, 0);
+@@ -94,29 +94,29 @@ class Ang16
+     // 9.6f 0x49E240, defined in CarPhysics_B0.cpp
+     inline wchar_t* ThetaText_49E240();
+ 
+-    Ang16 operator-()
++    Ang16 operator-() const
+     {
+         return Ang16(-rValue, 0);
+     }
+ 
+     //   Ang16  and  const int
+ 
+-    bool operator>(const s32 other)
++    bool operator>(const s32 other) const
+     {
+         return rValue > other;
+     }
+ 
+-    bool operator<(const s32 other)
++    bool operator<(const s32 other) const
+     {
+         return rValue < other;
+     }
+ 
+-    bool operator>=(const s32 other)
++    bool operator>=(const s32 other) const
+     {
+         return rValue >= other;
+     }
+ 
+-    bool operator<=(const s32 other)
++    bool operator<=(const s32 other) const
+     {
+         return rValue <= other;
+     }
+diff --git a/Source/error.cpp b/Source/error.cpp
+index c8a2b0f..2e3fa8f 100644
+--- a/Source/error.cpp
++++ b/Source/error.cpp
+@@ -45,7 +45,9 @@ void ErrorLog::Open_4D9470(const char_type* path, s32 a3)
+             break;
+     }
+ 
+-#if defined(__clang__) || (_MSC_VER <= 1200)
++#if defined(GTA2_PORT)
++    (void)mode;
++#elif defined(__clang__) || (_MSC_VER <= 1200)
+     ((ofstream&)field_0_ofstr).open(path, mode, filebuf::openprot);
+ #endif
+ 
+@@ -64,27 +66,39 @@ ErrorLog::ErrorLog(const char* FileName, int a3)
+ MATCH_FUNC(0x4D9690)
+ EXPORT void __cdecl log_on_line_written_cb_4D9690(void* a1)
+ {
++#if defined(GTA2_PORT)
++    fflush(stderr);
++#else
+     ((ostream_type*)a1)->flush();
++#endif
+ }
+ 
+ MATCH_FUNC(0x4D9620)
+ void ErrorLog::Write_4D9620(const char_type* pMsg)
+ {
++#if defined(GTA2_PORT)
++    fprintf(stderr, "%s\n", pMsg);
++#else
+ #if defined(__clang__) || (_MSC_VER <= 1200)
+ #else
+     using namespace std;
+ #endif
+     ((ostream_type&)this->field_0_ofstr) << pMsg << endl << flush;
++#endif
+ }
+ 
+ MATCH_FUNC(0x4D9650)
+ void ErrorLog::Write_Log_4D9650(const char_type* buffer)
+ {
++#if defined(GTA2_PORT)
++    fputs(buffer, stderr);
++#else
+ #if defined(__clang__) || (_MSC_VER <= 1200)
+ #else
+     using namespace std;
+ #endif
+     ((ostream_type&)this->field_0_ofstr) << buffer << flush;
++#endif
+ }
+ 
+ MATCH_FUNC(0x4D9540)
+diff --git a/Source/error.hpp b/Source/error.hpp
+index 841ccd1..fcd87c7 100644
+--- a/Source/error.hpp
++++ b/Source/error.hpp
+@@ -3,7 +3,10 @@
+ #include "Function.hpp"
+ #include <windows.h>
+ 
+-#if defined(__clang__) || (_MSC_VER <= 1200)
++#if defined(GTA2_PORT) // port: ErrorLog writes to the console
++#include <ostream>
++#define ostream_type std::ostream
++#elif defined(__clang__) || (_MSC_VER <= 1200)
+ #include <FSTREAM.H>
+ #define ostream_type ostream
+ #else
+diff --git a/Source/file.cpp b/Source/file.cpp
+index 0b01cdf..f10332e 100644
+--- a/Source/file.cpp
++++ b/Source/file.cpp
+@@ -82,7 +82,7 @@ void __stdcall File::CheckReadOnlyFile_4A6BE0(const char_type* FileName, s32 exp
+ }
+ 
+ MATCH_FUNC(0x4A6C80)
+-void* __stdcall File::ReadFileToBuffer_4A6C80(const char_type* FileName, size_t* pAllocatedBufferSize)
++void* __stdcall File::ReadFileToBuffer_4A6C80(const char_type* FileName, u32* pAllocatedBufferSize)
+ {
+     Error_SetName_4A0770(FileName);
+     FILE* hFileRead1 = crt::fopen(FileName, "rb");
+@@ -131,7 +131,7 @@ size_t __stdcall File::Read_4A6D90(void* Buffer, size_t ElementSize, size_t Elem
+ 
+ // Reads the whole file into the caller's buffer, which holds at most *pMaxSize bytes
+ MATCH_FUNC(0x4A6DB0)
+-size_t __stdcall File::ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, void* pBuffer, size_t* pMaxSize)
++size_t __stdcall File::ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, void* pBuffer, u32* pMaxSize)
+ {
+     Error_SetName_4A0770(FileName);
+     FILE* hFile = crt::fopen(FileName, "rb");
+@@ -161,7 +161,7 @@ size_t __stdcall File::ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, v
+ }
+ 
+ MATCH_FUNC(0x4A6E80)
+-void __stdcall File::WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, size_t* pBufferSize)
++void __stdcall File::WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, u32* pBufferSize)
+ {
+     Error_SetName_4A0770(FileName);
+     if (!*pBufferSize)
+@@ -194,7 +194,7 @@ size_t __stdcall File::Write_4A6F30(void* Buffer, size_t ElementSize, size_t Ele
+ }
+ 
+ MATCH_FUNC(0x4A6F50)
+-void __stdcall File::AppendBufferToFile_4A6F50(const char_type* FileName, void* pBuffer, size_t* pBufferSize)
++void __stdcall File::AppendBufferToFile_4A6F50(const char_type* FileName, void* pBuffer, u32* pBufferSize)
+ {
+     Error_SetName_4A0770(FileName);
+     if (!*pBufferSize)
+diff --git a/Source/file.hpp b/Source/file.hpp
+index 8d3eba3..ce72ab4 100644
+--- a/Source/file.hpp
++++ b/Source/file.hpp
+@@ -13,16 +13,16 @@ class File
+     EXPORT static bool __stdcall IsCdRomDrive_4A6BB0(char_type a1);
+ 
+     EXPORT static void __stdcall CheckReadOnlyFile_4A6BE0(const char_type* FileName, s32 expectedSize);
+-    EXPORT static void* __stdcall ReadFileToBuffer_4A6C80(const char_type* FileName, size_t* a2);
+-    EXPORT static size_t __stdcall ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, void* pBuffer, size_t* pMaxSize);
++    EXPORT static void* __stdcall ReadFileToBuffer_4A6C80(const char_type* FileName, u32* a2);
++    EXPORT static size_t __stdcall ReadFileToFixedBuffer_4A6DB0(const char_type* FileName, void* pBuffer, u32* pMaxSize);
+ 
+     EXPORT static size_t __stdcall Read_4A6D90(void* Buffer, size_t ElementSize, size_t ElementCount, FILE* Stream);
+ 
+-    EXPORT static void __stdcall WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, size_t* a3);
++    EXPORT static void __stdcall WriteBufferToFile_4A6E80(const char_type* FileName, void* Buffer, u32* a3);
+ 
+     EXPORT static size_t __stdcall Write_4A6F30(void* Buffer, size_t ElementSize, size_t ElementCount, FILE* Stream);
+ 
+-    EXPORT static void __stdcall AppendBufferToFile_4A6F50(const char_type* FileName, void* Buffer, size_t* a3);
++    EXPORT static void __stdcall AppendBufferToFile_4A6F50(const char_type* FileName, void* Buffer, u32* a3);
+ 
+     EXPORT static void __stdcall CreateFile_4A7000(const char_type* FileName);
+ 
+diff --git a/Source/fix16.cpp b/Source/fix16.cpp
+index 0737812..9656fe3 100644
+--- a/Source/fix16.cpp
++++ b/Source/fix16.cpp
+@@ -115,7 +115,7 @@ Fix16 Fix16::operator/(const Fix16& in)
+ */
+ 
+ MATCH_FUNC(0x436A50)
+-Fix16 __stdcall Fix16::Abs_436A50(Fix16& input)
++Fix16 __stdcall Fix16::Abs_436A50(const Fix16& input)
+ {
+     if (input.mValue > 0)
+     {
+diff --git a/Source/fix16.hpp b/Source/fix16.hpp
+index 4e7d541..4938afe 100644
+--- a/Source/fix16.hpp
++++ b/Source/fix16.hpp
+@@ -81,7 +81,7 @@ class Fix16
+         return *this;
+     }
+ 
+-    Fix16 operator+(const Fix16& in)
++    Fix16 operator+(const Fix16& in) const
+     {
+         s32 value = mValue + in.mValue;
+         return Fix16(value, 0);
+@@ -352,7 +352,7 @@ class Fix16
+             return b;
+         }
+     }
+-    EXPORT static Fix16 __stdcall Abs_436A50(Fix16& a2);
++    EXPORT static Fix16 __stdcall Abs_436A50(const Fix16& a2);
+     EXPORT static Fix16 __stdcall SquareRoot_436A70(const Fix16& a2) throw();
+     // throw(): the original calls these out-of-line copies without an EH frame (their inline
+     // bodies were visible there), see CarPhysics_B0::UpdateReferencePoint_563460
+@@ -383,7 +383,7 @@ class Fix16
+     }
+ 
+     //MATCH_FUNC(0x436A20)
+-    Fix16 operator/(const Fix16& in)
++    Fix16 operator/(const Fix16& in) const
+     {
+         s32 value = (s32)(((__int64)mValue << 14) / in.mValue);
+         return Fix16(value, 0);
+@@ -392,7 +392,7 @@ class Fix16
+     // Inlined from 9.6f at 0x401bf0
+     // I am not fully sure if this is right, i.e. the s32 parameter, instead of Fix16.
+     // But I couldn't match ObjectDefinition_74::SetDimensionsFromSprite_533090 without this overload.
+-    EXPORT Fix16 operator/(const s32& in)
++    EXPORT Fix16 operator/(const s32& in) const
+     {
+         s32 value = mValue / in;
+         return Fix16(value, 0);
+diff --git a/Source/gtx_0x106C.cpp b/Source/gtx_0x106C.cpp
+index 649de5d..8a281e9 100644
+--- a/Source/gtx_0x106C.cpp
++++ b/Source/gtx_0x106C.cpp
+@@ -1216,6 +1216,24 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
+ {
+     // Inline asm in the original (lodsw, rep movsb). Each entry is a u16 offset from the end
+     // of the previous run, a u8 length and that many bytes.
++#if defined(GTA2_PORT)
++    // C++ translation of the original asm: u16 offset from the end of the previous run,
++    // u8 length, then that many bytes.
++    const u8* src = reinterpret_cast<const u8*>(field_0_pData);
++    const u8* const end = src + field_4_len;
++    u8* dst = pArray;
++    do
++    {
++        u16 offset;
++        memcpy(&offset, src, 2);
++        src += 2;
++        u8 len = *src++;
++        dst += offset;
++        memcpy(dst, src, len);
++        dst += len;
++        src += len;
++    } while (src != end);
++#else
+     sprite_delta* pThis = this;
+     __asm
+     {
+@@ -1239,6 +1257,7 @@ void sprite_delta::Delta_5ABA00(u8* pArray)
+         pop esi
+         pop edi
+     }
++#endif
+ }
+ 
+ // https://decomp.me/scratch/Cc0Dx Not fully working
+@@ -1246,6 +1265,31 @@ MATCH_FUNC(0x5ABA40)
+ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
+ {
+     // Inline asm in the original (lodsw / loop)
++#if defined(GTA2_PORT)
++    // C++ translation of the original asm (mirrored delta), register arithmetic kept as is.
++    const u8* src = reinterpret_cast<const u8*>(field_0_pData);
++    const u8* const end = src + field_4_len;
++    u8* dst = pArray + width - 1;
++    do
++    {
++        u16 offset;
++        memcpy(&offset, src, 2);
++        src += 2;
++        u32 count = *src;
++        dst += offset;
++        const u32 twice_col = (offset & 0xFFu) << 1;
++        dst -= twice_col;
++        if (twice_col >= 0x100)
++        {
++            dst += 0x200;
++        }
++        ++src;
++        do
++        {
++            *dst-- = *src++;
++        } while (--count);
++    } while (src != end);
++#else
+     // Each entry: u16 offset, u8 len, then len bytes written backwards from the end of the row
+     __asm
+     {
+@@ -1283,6 +1327,7 @@ void sprite_delta::Delta_5ABA40(u8* pArray, u32 width)
+         pop esi
+         pop edi
+     }
++#endif
+ }
+ 
+ MATCH_FUNC(0x5abaa0)
+diff --git a/Source/map_0x370.cpp b/Source/map_0x370.cpp
+index 0eef09d..3c61452 100644
+--- a/Source/map_0x370.cpp
++++ b/Source/map_0x370.cpp
+@@ -4724,7 +4724,8 @@ void Map_0x370::load_chunk_4E94B0(const char_type* pChunkType, size_t chunkLen)
+     }
+     else
+     {
+-        File::Global_Seek_4A7140(&chunkLen);
++        u32 seekLen = chunkLen; // port: size_t is not u32 on wasm32
++        File::Global_Seek_4A7140(&seekLen);
+     }
+ }
+ 
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index a150294..7fbc3a2 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1560,6 +1560,11 @@ GUID IID_IDirectDrawSurface4_ = {0x0B2B8630, 0xAD35, 0x11D0, 0x8E, 0xA6, 0x00, 0
+ MATCH_FUNC(0x4C4EC0)
+ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
+ {
++#if defined(GTA2_PORT)
++    // Browser port: no DirectDraw to probe; report DirectX 7 on NT.
++    *pDXVer = 0x700;
++    *osKind = VER_PLATFORM_WIN32_NT;
++#else
+     HMODULE hDInput; // eax
+     FARPROC pDirectInputCreateA; // ebx
+     HMODULE hDDraw; // eax
+@@ -1728,6 +1733,7 @@ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
+     {
+         *pDXVer = 0x601;
+     }
++#endif
+ }
+ 
+ const char_type* kDefaultDllNames_626A00[2] = {"d3ddll.dll", "dmavideo.dll"};
+@@ -2626,6 +2632,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
+ MATCH_FUNC(0x5E5D60)
+ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
+ {
++#if defined(GTA2_PORT)
++    // Browser port: no version resource. The code base is the 10.5 reconstruction.
++    *pVerMinor = 10;
++    *pVerMajor = 5;
++#else
+     DWORD dwHandle;
+     DWORD dwSize = GetFileVersionInfoSizeA("GTA2.EXE", &dwHandle);
+     BYTE* pAlloc = new BYTE[dwSize];
+@@ -2639,4 +2650,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
+         *pVerMajor = pFileInfo->dwProductVersionMS & 0xFFFF;
+     }
+     delete[] pAlloc;
++#endif
+ }
+\ No newline at end of file
+-- 
+2.53.0
+

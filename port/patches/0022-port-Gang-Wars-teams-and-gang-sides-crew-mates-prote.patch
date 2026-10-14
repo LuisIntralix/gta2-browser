@@ -1,0 +1,167 @@
+From 46efe9ac67187d3cc66bfff0fa92d35b9a1c13fe Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 12:21:49 +1100
+Subject: [PATCH 22/23] port: Gang Wars teams and gang sides (crew-mates
+ protected, respect by side on the first tick); standings snapshot every tick
+
+---
+ Source/port_coop.cpp | 85 +++++++++++++++++++++++++++++++++++++++++++-
+ Source/port_coop.hpp | 10 ++++++
+ Source/winmain.cpp   |  4 +++
+ 3 files changed, 98 insertions(+), 1 deletion(-)
+
+diff --git a/Source/port_coop.cpp b/Source/port_coop.cpp
+index 0c8e6bd..213e596 100644
+--- a/Source/port_coop.cpp
++++ b/Source/port_coop.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include "Char_Pool.hpp"
+ #include "Game_0x40.hpp"
++#include "Gang.hpp"
+ #include "Ped.hpp"
+ #include "Player.hpp"
+ 
+@@ -50,9 +51,55 @@ extern "C" s32 gGta2PortWasted[6] = {}; // per player: deaths from any cause (Pl
+ extern "C" s32 gGta2PortBusted[6] = {}; // per player: arrests
+ EXTERN_GLOBAL(s32, bStartNetworkGame_7081F0);
+ 
++extern "C" s32 gGta2PortTeam[6] = {-1, -1, -1, -1, -1, -1};
++extern "C" s32 gGta2PortSide[6] = {};
++
++namespace
++{
++bool TeamsOn()
++{
++    for (s32 t : gGta2PortTeam)
++    {
++        if (t >= 0)
++        {
++            return true;
++        }
++    }
++    return false;
++}
++
++s32 GangCode(const Gang_144& g)
++{
++    return static_cast<u8>(g.field_2_name[0]) | (static_cast<u8>(g.field_2_name[1]) << 8) |
++        (static_cast<u8>(g.field_2_name[2]) << 16);
++}
++
++// The street gangs players can side with (Downtown, Residential, Industrial); the special ones
++// (police, Residential's "alm", Industrial's "isl") are left alone.
++bool IsStreetGang(s32 code)
++{
++    static const char* kNames[] = {"zai", "loo", "yak", "red", "sci", "rus", "kri"};
++    for (const char* n : kNames)
++    {
++        if (code == (static_cast<u8>(n[0]) | (static_cast<u8>(n[1]) << 8) | (static_cast<u8>(n[2]) << 16)))
++        {
++            return true;
++        }
++    }
++    return false;
++}
++
++bool gSidesApplied = false;
++} // namespace
++
+ bool Gta2Port_BlockFriendlyFire(Ped* pVictim)
+ {
+-    if (gGta2PortFriendlyFire || !bStartNetworkGame_7081F0 || !pVictim->field_15C_player || !pVictim->field_204_killer_id)
++    if (!bStartNetworkGame_7081F0 || !pVictim->field_15C_player || !pVictim->field_204_killer_id)
++    {
++        return false;
++    }
++    const bool teams = TeamsOn();
++    if (!teams && gGta2PortFriendlyFire)
+     {
+         return false;
+     }
+@@ -61,6 +108,42 @@ bool Gta2Port_BlockFriendlyFire(Ped* pVictim)
+     {
+         return false;
+     }
++    if (teams)
++    {
++        // Gang Wars: only crew-mates are protected from each other
++        const s32 a = gGta2PortTeam[pAttacker->field_15C_player->get_idx_4219D0() % 6];
++        const s32 v = gGta2PortTeam[pVictim->field_15C_player->get_idx_4219D0() % 6];
++        if (a < 0 || a != v)
++        {
++            return false;
++        }
++    }
+     pVictim->field_204_killer_id = 0;
+     return true;
+ }
++
++void Gta2Port_CoopTick()
++{
++    if (gSidesApplied || !gGangPool_CA8_67E274)
++    {
++        return;
++    }
++    gSidesApplied = true;
++    for (u8 p = 0; p < 6; ++p)
++    {
++        if (!gGta2PortSide[p])
++        {
++            continue;
++        }
++        for (s32 i = 0; i < 10; ++i)
++        {
++            Gang_144& g = gGangPool_CA8_67E274->field_0_gang_list[i];
++            const s32 code = GangCode(g);
++            if (!g.field_0_used || !IsStreetGang(code))
++            {
++                continue;
++            }
++            g.SetRespect_4BEE30(p, code == gGta2PortSide[p] ? 100 : -100);
++        }
++    }
++}
+diff --git a/Source/port_coop.hpp b/Source/port_coop.hpp
+index b0d1fbe..4049ad3 100644
+--- a/Source/port_coop.hpp
++++ b/Source/port_coop.hpp
+@@ -20,3 +20,13 @@ Ped* Gta2Port_PlayerPedOfGroup(PedGroup* pGroup);
+ // does not set it again, still counts.
+ bool Gta2Port_BlockFriendlyFire(Ped* pVictim);
+ extern "C" s32 gGta2PortFriendlyFire; // 1: players can hurt each other (the original)
++
++// Gang Wars (co-op mode): each player's crew (-1: none) and the district gang the crew sides with
++// (its three-letter name packed into an int, 0: none). Crew-mates cannot hurt each other; everyone
++// else can. Set by the shell before the match, the same on every computer.
++extern "C" s32 gGta2PortTeam[6];
++extern "C" s32 gGta2PortSide[6];
++
++// Once per game tick of a network game (winmain.cpp): applies the gang sides on the first tick
++// (respect +100 with your side's gang, -100 with the other street gangs).
++void Gta2Port_CoopTick();
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index eecb995..938fcae 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1611,6 +1611,8 @@ static bool PortNetReceivePoll()
+ }
+ 
+ extern "C" void Gta2Port_SyncRecord(); // port/platform/dev_hooks.cpp
++void Gta2Port_CoopTick();              // port_coop.cpp
++extern "C" void Gta2Port_CoopSnapshot(); // port/platform/coop_web.cpp
+ 
+ // Co-op diagnostics for the shell and tests: where the network game is.
+ extern "C" const s32* gta2_port_net_debug()
+@@ -1731,6 +1733,8 @@ EXPORT u8 RunGameFrame_4DA850()
+         {
+             ticked = true;
+             bContinue = ExecuteGame_4DA780();
++            Gta2Port_CoopTick();
++            Gta2Port_CoopSnapshot();
+             Gta2Port_InterpTick();
+             Gta2Port_SyncRecord();
+             // The next tick is due one frame after this one was due, not after it ran: a browser only
+-- 
+2.53.0
+

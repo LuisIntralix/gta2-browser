@@ -1,0 +1,133 @@
+From bbaa20e63b6bdd72e291f54f6dc2385de8b48828 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 11:48:43 +1100
+Subject: [PATCH 21/23] port: co-op friendly fire option (another player's hits
+ and kills are ignored when off); per-player death and arrest counts
+
+---
+ Source/Ped.cpp       | 12 ++++++++++++
+ Source/Player.cpp    | 11 +++++++++++
+ Source/port_coop.cpp | 21 +++++++++++++++++++++
+ Source/port_coop.hpp |  7 +++++++
+ 4 files changed, 51 insertions(+)
+
+diff --git a/Source/Ped.cpp b/Source/Ped.cpp
+index 1c9e1a6..776c1e7 100644
+--- a/Source/Ped.cpp
++++ b/Source/Ped.cpp
+@@ -1627,6 +1627,12 @@ void Ped::HandleClosePedInteraction_45CAA0()
+ MATCH_FUNC(0x45ce50)
+ void Ped::TakeDamage(s16 damage)
+ {
++#ifdef GTA2_PORT
++    if (Gta2Port_BlockFriendlyFire(this))
++    {
++        return; // co-op with friendly fire off: another player's hit
++    }
++#endif
+     if (field_208_invulnerability <= 0)
+     {
+         field_216_health -= damage;
+@@ -11632,6 +11638,12 @@ void Ped::UpdateStatsForKiller_46F720()
+ MATCH_FUNC(0x46f9d0)
+ void Ped::Kill_46F9D0()
+ {
++#ifdef GTA2_PORT
++    if (Gta2Port_BlockFriendlyFire(this))
++    {
++        return; // co-op with friendly fire off: killed by another player (run over, car bomb...)
++    }
++#endif
+     if ((field_21C & ped_flag_mask::k_ped_on_fire) != 0)
+     {
+         if (field_168_game_object)
+diff --git a/Source/Player.cpp b/Source/Player.cpp
+index 2263095..b1cd020 100644
+--- a/Source/Player.cpp
++++ b/Source/Player.cpp
+@@ -35,6 +35,11 @@
+ #include "PlayerCrimeStats_3C.hpp"
+ #include <DINPUT.H>
+ 
++#ifdef GTA2_PORT
++extern "C" s32 gGta2PortWasted[6]; // port_coop.cpp
++extern "C" s32 gGta2PortBusted[6];
++#endif
++
+ // Forward declarations: the functions below are in address order
+ EXTERN_GLOBAL(s16, gTestRouteIdx_675F14);
+ EXTERN_GLOBAL(Car_BC*, gTestFireCar_675C30);
+@@ -1756,6 +1761,9 @@ void Player::Wasted_567130()
+             Player::ResetAuxCamera_5695A0();
+         }
+         field_28_bWastedOrBusted = 1;
++#ifdef GTA2_PORT
++        ++gGta2PortWasted[get_idx_4219D0() % 6]; // co-op scoreboard: deaths from any cause
++#endif
+         field_2C_death_countdown = 70;
+         if (field_684_lives.get_value() > 1)
+         {
+@@ -1845,6 +1853,9 @@ void Player::Busted_5679E0()
+         }
+         SetDeathType_434950(0);
+         field_28_bWastedOrBusted = 1;
++#ifdef GTA2_PORT
++        ++gGta2PortBusted[get_idx_4219D0() % 6]; // co-op scoreboard: arrests
++#endif
+         field_2C_death_countdown = 70;
+         if (field_2D0_bAuxCamActive)
+         {
+diff --git a/Source/port_coop.cpp b/Source/port_coop.cpp
+index fef6f8a..0c8e6bd 100644
+--- a/Source/port_coop.cpp
++++ b/Source/port_coop.cpp
+@@ -1,6 +1,7 @@
+ // Browser port, co-op (D20): see port_coop.hpp.
+ #include "port_coop.hpp"
+ 
++#include "Char_Pool.hpp"
+ #include "Game_0x40.hpp"
+ #include "Ped.hpp"
+ #include "Player.hpp"
+@@ -43,3 +44,23 @@ Ped* Gta2Port_PlayerPedOfGroup(PedGroup* pGroup)
+     }
+     return nullptr;
+ }
++
++extern "C" s32 gGta2PortFriendlyFire = 1;
++extern "C" s32 gGta2PortWasted[6] = {}; // per player: deaths from any cause (Player.cpp)
++extern "C" s32 gGta2PortBusted[6] = {}; // per player: arrests
++EXTERN_GLOBAL(s32, bStartNetworkGame_7081F0);
++
++bool Gta2Port_BlockFriendlyFire(Ped* pVictim)
++{
++    if (gGta2PortFriendlyFire || !bStartNetworkGame_7081F0 || !pVictim->field_15C_player || !pVictim->field_204_killer_id)
++    {
++        return false;
++    }
++    Ped* pAttacker = gPedManager_6787BC ? gPedManager_6787BC->PedById(pVictim->field_204_killer_id) : nullptr;
++    if (!pAttacker || pAttacker == pVictim || !pAttacker->field_15C_player || pAttacker->field_15C_player == pVictim->field_15C_player)
++    {
++        return false;
++    }
++    pVictim->field_204_killer_id = 0;
++    return true;
++}
+diff --git a/Source/port_coop.hpp b/Source/port_coop.hpp
+index 31ddcaf..b0d1fbe 100644
+--- a/Source/port_coop.hpp
++++ b/Source/port_coop.hpp
+@@ -13,3 +13,10 @@ Ped* Gta2Port_NearestPlayerPed(Fix16 x, Fix16 y);
+ 
+ // The player ped whose group is pGroup (the player is the group's leader), or null.
+ Ped* Gta2Port_PlayerPedOfGroup(PedGroup* pGroup);
++
++// Friendly fire off (co-op, set by the host for everyone): true when the damage or death about to
++// be applied to a player comes from another player (the attacker each damage path records in
++// field_204_killer_id); the record is cleared, so later damage from falls, fire or drowning, which
++// does not set it again, still counts.
++bool Gta2Port_BlockFriendlyFire(Ped* pVictim);
++extern "C" s32 gGta2PortFriendlyFire; // 1: players can hurt each other (the original)
+-- 
+2.53.0
+

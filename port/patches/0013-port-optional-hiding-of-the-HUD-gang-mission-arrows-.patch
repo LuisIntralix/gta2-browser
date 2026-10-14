@@ -1,0 +1,38 @@
+From 15c24bda6d681990958370253e226abe77301669 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 13:57:07 +1100
+Subject: [PATCH 13/23] port: optional hiding of the HUD gang/mission arrows
+ (the shell's minimap shows them)
+
+---
+ Source/Hud.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Source/Hud.cpp b/Source/Hud.cpp
+index 563e647..c3aa90e 100644
+--- a/Source/Hud.cpp
++++ b/Source/Hud.cpp
+@@ -994,9 +994,20 @@ bool Hud_Arrow_7C_Array::IsThereAnyOtherArrowsInSameGang_5D0E40(Hud_Arrow_7C* pA
+     return false;
+ }
+ 
++#ifdef GTA2_PORT
++// Port layer (port/platform/map_web.cpp): the minimap shows the gang and mission arrows instead.
++extern "C" s32 gGta2PortHideHudArrows;
++#endif
++
+ MATCH_FUNC(0x5d0e90)
+ void Hud_Arrow_7C_Array::DrawArrows_5D0E90()
+ {
++#ifdef GTA2_PORT
++    if (gGta2PortHideHudArrows)
++    {
++        return; // drawing only: the arrows' targets still update
++    }
++#endif
+     if (IsNetworkGame_434B10())
+     {
+         // Limit drawn arrows in multiplayer
+-- 
+2.53.0
+

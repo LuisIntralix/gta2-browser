@@ -1,0 +1,62 @@
+From 6bec342d6428bd7ac8b6e99015f44baba6114e04 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 10:39:21 +1100
+Subject: [PATCH 18/23] port: co-op at 30 ticks a second with smooth in-between
+ drawing; drift-free tick schedule
+
+---
+ Source/winmain.cpp | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index f5ad050..761a931 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1714,6 +1714,7 @@ EXPORT u8 RunGameFrame_4DA850()
+     if (bStartNetworkGame_7081F0)
+     {
+ #ifdef GTA2_PORT
++        bool ticked = false;
+         if (sPortNetPending)
+         {
+             if (PortNetReceivePoll())
+@@ -1724,9 +1725,17 @@ EXPORT u8 RunGameFrame_4DA850()
+         }
+         else if (Time >= gMatchStartTime_6F5A28)
+         {
++            ticked = true;
+             bContinue = ExecuteGame_4DA780();
++            Gta2Port_InterpTick();
+             Gta2Port_SyncRecord();
+-            gMatchStartTime_6F5A28 = Time + gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
++            // The next tick is due one frame after this one was due, not after it ran: a browser only
++            // checks once per display frame, and "now + frame" lost up to a display frame every tick.
++            // After a long wait (the network, a hidden tab) the schedule restarts from now.
++            const s32 frame_ms = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
++            gMatchStartTime_6F5A28 = Time - gMatchStartTime_6F5A28 > static_cast<DWORD>(frame_ms * 4)
++                ? Time + frame_ms
++                : gMatchStartTime_6F5A28 + frame_ms;
+             sPortNetPending = PortNetworkInputsBegin();
+             if (!sPortNetPending)
+             {
+@@ -1738,6 +1747,17 @@ EXPORT u8 RunGameFrame_4DA850()
+                 sPortNetPending = false;
+             }
+         }
++        // Between ticks (also while waiting for the other players): draw again, interpolated, at most
++        // every 6 ms, as in single player (D04).
++        if (!ticked && gGta2PortInterpolate && gGame_0x40_67E008->field_0_game_state == GameState::Running_1 &&
++            Time - sPortLastDrawMs >= 6)
++        {
++            Gta2Port_InterpBegin(PortInterpFraction(), true);
++            gGame_0x40_67E008->Draw_4B92D0();
++            Gta2Port_InterpEnd();
++            pVid_FlipBuffers(gVidSys_7071D0);
++            sPortLastDrawMs = Time;
++        }
+ #else
+         if (Time >= gMatchStartTime_6F5A28)
+         {
+-- 
+2.53.0
+

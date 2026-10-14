@@ -1,0 +1,80 @@
+From d3515f1cacab2944b066b4421ff060b1dc664565 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:04:34 +1100
+Subject: [PATCH 01/23] port: const references where clang rejects temporaries
+ (MSVC extension)
+
+---
+ Source/ang16.hpp | 2 +-
+ Source/fix16.cpp | 2 +-
+ Source/fix16.hpp | 8 ++++----
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/Source/ang16.hpp b/Source/ang16.hpp
+index 35ddde0..c8da470 100644
+--- a/Source/ang16.hpp
++++ b/Source/ang16.hpp
+@@ -329,7 +329,7 @@ class Ang16
+     }
+ 
+     // 9.6f func: 0x401C40
+-    Ang16(Fix16& value, u8 zero)
++    Ang16(const Fix16& value, u8 zero)
+     {
+         rValue = value.ToInt();
+         Normalize();
+diff --git a/Source/fix16.cpp b/Source/fix16.cpp
+index c2dfe78..6de783e 100644
+--- a/Source/fix16.cpp
++++ b/Source/fix16.cpp
+@@ -128,7 +128,7 @@ Fix16 __stdcall Fix16::Abs_436A50(Fix16& input)
+ }
+ 
+ MATCH_FUNC(0x436A70)
+-Fix16 __stdcall Fix16::SquareRoot_436A70(Fix16& input)
++Fix16 __stdcall Fix16::SquareRoot_436A70(const Fix16& input) throw()
+ {
+     return Fix16(sqrt(input.AsDouble()));
+ }
+diff --git a/Source/fix16.hpp b/Source/fix16.hpp
+index 7caca6f..9473d59 100644
+--- a/Source/fix16.hpp
++++ b/Source/fix16.hpp
+@@ -326,14 +326,14 @@ class Fix16
+     // inline budget charges the front-end size, 48 here (41 without the local, 46 with a non-const one).
+     // Car_BC::ApplyExplosionImpulse_443710 needs >= 48 and CarPhysics_B0::EnforceGearSensitiveMaxSpeed_562D00
+     // <= 49; with GetLength_41E260 at 162, Crane_15C::ComputeHookPolar_47F6C0 needs >= 48 too.
+-    inline static Fix16 __stdcall SquareRoot(Fix16& input)
++    inline static Fix16 __stdcall SquareRoot(const Fix16& input)
+     {
+         const f64 value = input.AsDouble();
+         return Fix16(sqrt(value));
+     }
+ 
+     // SquareRoot forced inline, only for Fix16_Point::GetLength_SqrtForced_43A240 (unexplained)
+-    __forceinline static Fix16 __stdcall SquareRoot_forced(Fix16& input)
++    __forceinline static Fix16 __stdcall SquareRoot_forced(const Fix16& input)
+     {
+         return Fix16(sqrt(input.AsDouble()));
+     }
+@@ -341,7 +341,7 @@ class Fix16
+     EXPORT static Fix16 __stdcall Max_44E540(Fix16& pLhs, Fix16& pRhs);
+     // 9.6f 0x41E130, out-of-line copy Max_44E540. Small functions inline it (Ped_List_4::GetFromListClosestPedToPoint_471340),
+     // and as a site after the two Abs it sets their nested budget in MaxAbsDistance_42A6B0
+-    inline static Fix16 __stdcall Max_41E130(Fix16& a, Fix16& b)
++    inline static Fix16 __stdcall Max_41E130(const Fix16& a, const Fix16& b)
+     {
+         if (a > b)
+         {
+@@ -353,7 +353,7 @@ class Fix16
+         }
+     }
+     EXPORT static Fix16 __stdcall Abs_436A50(Fix16& a2);
+-    EXPORT static Fix16 __stdcall SquareRoot_436A70(Fix16& a2) throw();
++    EXPORT static Fix16 __stdcall SquareRoot_436A70(const Fix16& a2) throw();
+     // throw(): the original calls these out-of-line copies without an EH frame (their inline
+     // bodies were visible there), see CarPhysics_B0::UpdateReferencePoint_563460
+     // Out-of-line copy of operator+ (0x408660)
+-- 
+2.53.0
+

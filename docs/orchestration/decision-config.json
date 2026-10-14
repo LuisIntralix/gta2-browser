@@ -1,0 +1,282 @@
+{
+  "spec_version": "1.1",
+  "decision_status": "locked",
+  "decisions_document": "docs/orchestration/decisions.md",
+  "decision_ids": [
+    "D01",
+    "D02",
+    "D03",
+    "D04",
+    "D05",
+    "D06",
+    "D07",
+    "D08",
+    "D09",
+    "D10",
+    "D11",
+    "D12",
+    "D13",
+    "D14",
+    "D15",
+    "D16",
+    "D17",
+    "D18",
+    "D19",
+    "D20",
+    "D21"
+  ],
+  "profile": {
+    "original": "Rockstar Classics 9.6F",
+    "language": "English",
+    "source_revision": "02de8beeb766644417f195d360eba33af0ee491f",
+    "reference_host": "Windows 11 x64",
+    "native_reconstruction_build_required": false,
+    "original_svg_interop": false
+  },
+  "stack": {
+    "core": "C++17",
+    "target": "wasm32",
+    "emscripten": "6.0.12",
+    "shell": "plain JavaScript ES modules with JSDoc",
+    "renderer": "WebGL2",
+    "node": "26.7.0",
+    "ws": "8.21.0",
+    "ui_framework": null,
+    "bundler": null,
+    "threads": false,
+    "asyncify": false,
+    "client_physics_prediction": false,
+    "rollback": false
+  },
+  "memory": {
+    "wasm_initial_bytes": 134217728,
+    "wasm_max_bytes": 1073741824,
+    "texture_cache_bytes": 134217728,
+    "sample_cache_bytes": 67108864
+  },
+  "simulation": {
+    "tick_ms": 33,
+    "max_catchup_ticks": 4,
+    "overrun_action": "visible performance pause",
+    "fast_mode": false,
+    "fractional_bits": 14,
+    "add_sub_negate": "wrap signed32 bits explicitly",
+    "multiply": "floor of signed64 product / 16384 then wrap32",
+    "divide": "truncate signed64 value * 16384 / divisor toward zero then wrap32",
+    "divide_by_zero": "fatal simulation error with reproduction",
+    "rng": {
+      "algorithm": "MSVC-style uint32 LCG; reference equivalence unverified",
+      "seed": 1,
+      "multiplier": 214013,
+      "increment": 2531011,
+      "right_shift": 16,
+      "mask": 32767,
+      "first_five": [
+        41,
+        18467,
+        6334,
+        26500,
+        19169
+      ]
+    }
+  },
+  "assets": {
+    "pack_magic": "GTA2PK01",
+    "header_bytes": 16,
+    "manifest_encoding": "UTF-8 JSON",
+    "compression": false,
+    "payload_alignment": 8,
+    "max_pack_bytes": 2147483648,
+    "max_entry_bytes": 536870912,
+    "max_entries": 4096,
+    "max_manifest_bytes": 1048576,
+    "hash": "SHA-256",
+    "filesystem": "MEMFS current district only",
+    "blob_cache": "IndexedDB",
+    "media_preparation": "Local FFmpeg; MP4 H.264 yuv420p plus AAC"
+  },
+  "render": {
+    "atlas_width": 2048,
+    "atlas_height": 2048,
+    "atlas_border_pixels": 1,
+    "sampling": "nearest",
+    "reference_width": 640,
+    "reference_height": 480,
+    "aspect_policy": "preserve vertical span and expand horizontally",
+    "hud_scales": [
+      0.75,
+      1.0,
+      1.25,
+      1.5
+    ],
+    "default_hud_scale": 1.0,
+    "resolutions": [
+      [
+        1920,
+        1080
+      ],
+      [
+        2560,
+        1440
+      ]
+    ],
+    "dynamic_resolution": false
+  },
+  "audio": {
+    "max_voices": 64,
+    "effects": "Web Audio AudioBuffer",
+    "music": "HTML media element",
+    "video": "HTML video element with prepared local media"
+  },
+  "save": {
+    "database": "gta2-browser-v1",
+    "schema_version": 1,
+    "export_magic": "GTA2SV01",
+    "named_slots_per_campaign": 10,
+    "retained_revisions_per_slot": 2,
+    "commit": "one IndexedDB transaction for revision and head",
+    "auto_save": "between missions/districts",
+    "raw_memory_dump": false,
+    "sp_to_coop": "clone between missions only",
+    "coop_to_sp": false
+  },
+  "network": {
+    "topology": "host-star",
+    "max_players": 4,
+    "authority": "browser host",
+    "channels": {
+      "control-v1": {
+        "ordered": true,
+        "reliable": true
+      },
+      "input-v1": {
+        "ordered": false,
+        "maxRetransmits": 0
+      },
+      "state-v1": {
+        "ordered": false,
+        "maxRetransmits": 0
+      }
+    },
+    "snapshot_ms": 33,
+    "input_resend_ms": 33,
+    "input_previous_frames": 2,
+    "neutralize_input_after_ms": 250,
+    "interpolation_ticks": 2,
+    "max_visual_extrapolation_ticks": 1,
+    "snapshot_header_magic": "G2N1",
+    "snapshot_header_bytes": 32,
+    "byte_order": "little",
+    "snapshot_history_count": 64,
+    "max_payload_per_message_bytes": 12288,
+    "max_snapshot_parts": 512,
+    "max_reassembled_snapshot_bytes": 4194304,
+    "incomplete_delta_timeout_ms": 200,
+    "full_baseline_timeout_ms": 10000,
+    "max_incomplete_deltas": 2,
+    "max_incomplete_full_baselines": 1,
+    "state_backpressure_bytes": 262144,
+    "control_backpressure_bytes": 1048576,
+    "congestion_timeout_ms": 10000,
+    "steady_upload_target_bytes_per_second_per_guest": 1048576,
+    "relay": "coturn",
+    "websocket_gameplay_fallback": false
+  },
+  "rooms": {
+    "join_token_bits": 128,
+    "invite_token_location": "URL fragment",
+    "max_signaling_message_bytes": 65536,
+    "signaling_messages_per_second": 30,
+    "unused_room_expiry_ms": 60000,
+    "new_guest_admission": "between missions",
+    "reconnect_grace_ms": 60000,
+    "non_actor_quorum_removal_ms": 2000,
+    "host_heartbeat_timeout_ms": 5000,
+    "host_migration": false
+  },
+  "coop": {
+    "active_missions": 1,
+    "implicit_player_target": "mission actor",
+    "shared": [
+      "score/cash",
+      "gang respect",
+      "progression"
+    ],
+    "individual": [
+      "health",
+      "wanted level",
+      "weapons",
+      "ammunition"
+    ],
+    "reward_multiplication_by_players": false,
+    "non_actor_respawn_simulation_ms": 5000,
+    "safe_spawn_tile_radii": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "save_owner": "host",
+    "actor_disconnect": "pause then original failure once after grace"
+  },
+  "validation": {
+    "g2_browsers": [
+      "Chrome",
+      "Firefox"
+    ],
+    "baseline_hardware": [
+      "Apple M1 Mac 8 GB RAM",
+      "Windows Core i5-10400 GTX 1650 16 GB RAM"
+    ],
+    "display_hz": 60,
+    "mean_fps_min": 59,
+    "frame_p95_max_ms": 18,
+    "frame_p99_max_ms": 33.4,
+    "steady_stall_max_ms": 100,
+    "warmup_seconds": 60,
+    "scene_seconds": 600,
+    "sp_soak_minutes": 30,
+    "coop_soak_minutes": 120,
+    "response_p95_at_100ms_rtt_max_ms": 250
+  },
+  "fact_gates": [
+    "local asset hashes and version compatibility",
+    "original runtime and numerical parity evidence",
+    "local FFmpeg availability/capabilities",
+    "concrete mission fields requiring semantic evidence",
+    "physical test hardware and internet TURN access",
+    "source distribution permission"
+  ],
+  "modern_camera": {
+    "modes": [
+      "classic",
+      "modern"
+    ],
+    "default_play_mode": "modern",
+    "presentation_only": true,
+    "canonical_view_reference_px": [
+      640,
+      480
+    ],
+    "lands_after_gate": "G2",
+    "before": "campaign_qa",
+    "activation_margin": {
+      "default": 0,
+      "classic": "always 0",
+      "status": "deviation_if_enabled"
+    },
+    "primary_goal": "eliminate_zoom_pumping",
+    "speed_filter_time_constant_s": 1.0,
+    "zoom_out_time_s": 1.0,
+    "zoom_in_hold_s": 1.5,
+    "speed_deadband": "tune_against_capture",
+    "height_cap": "tune_against_capture",
+    "sampling": "sharp_bilinear_modern_only",
+    "acceptance": [
+      "zoom_reversals_per_minute",
+      "peak_zoom_rate",
+      "no_reversal_from_speed_change_shorter_than_hold",
+      "classic_matches_original_capture"
+    ]
+  }
+}

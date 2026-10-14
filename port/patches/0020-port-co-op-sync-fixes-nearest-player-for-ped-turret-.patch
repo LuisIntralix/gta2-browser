@@ -1,0 +1,214 @@
+From 42ef4af1ae346a5e487683c997dbfdbf311bc20e Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 14 Oct 2026 11:23:42 +1100
+Subject: [PATCH 20/23] port: co-op sync fixes (nearest player for ped turret
+ fire, roadblock removal and trains; the killing gang's own player for gang
+ respect); the match continues when the host leaves
+
+---
+ Source/Car_BC.cpp    | 16 ++++++++++++++++
+ Source/Ped.cpp       | 15 +++++++++++++++
+ Source/Police_38.cpp | 13 +++++++++++++
+ Source/port_coop.cpp | 45 ++++++++++++++++++++++++++++++++++++++++++++
+ Source/port_coop.hpp | 15 +++++++++++++++
+ Source/winmain.cpp   |  6 +++++-
+ 6 files changed, 109 insertions(+), 1 deletion(-)
+ create mode 100644 Source/port_coop.cpp
+ create mode 100644 Source/port_coop.hpp
+
+diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
+index fb9c01f..c7710a1 100644
+--- a/Source/Car_BC.cpp
++++ b/Source/Car_BC.cpp
+@@ -1,3 +1,6 @@
++#ifdef GTA2_PORT
++#include "port_coop.hpp"
++#endif
+ #include "Car_BC.hpp"
+ #include "explosion_type.hpp"
+ #include "ped_death_cause.hpp"
+@@ -5950,7 +5953,20 @@ char_type Car_BC::TrainUpdate_442D70()
+     Fix16 player_z;
+     if (GetCarLinearSpeed_43A240() > gFix16_6777CC)
+     {
++#ifdef GTA2_PORT
++        // co-op (D20): the nearest player (the original: this computer's player)
++        if (Ped* pNearest = Gta2Port_NearestPlayerPed(field_50_car_sprite->field_14_xy.x, field_50_car_sprite->field_14_xy.y))
++        {
++            player_x = pNearest->get_cam_x();
++            player_y = pNearest->get_cam_y();
++        }
++        else
++        {
++            gGame_0x40_67E008->field_38_orf1->get_pos_569920(&player_x, &player_y, &player_z);
++        }
++#else
+         gGame_0x40_67E008->field_38_orf1->get_pos_569920(&player_x, &player_y, &player_z);
++#endif
+ 
+         if (Fix16::Abs_negate_out_of_line(field_50_car_sprite->field_14_xy.x - player_x) >= Fix16(0x28000, 0) ||
+             Fix16::Abs(field_50_car_sprite->field_14_xy.y - player_y) >= Fix16(0x28000, 0))
+diff --git a/Source/Ped.cpp b/Source/Ped.cpp
+index ed9a30d..1c9e1a6 100644
+--- a/Source/Ped.cpp
++++ b/Source/Ped.cpp
+@@ -1,3 +1,6 @@
++#ifdef GTA2_PORT
++#include "port_coop.hpp"
++#endif
+ #include "Ped.hpp"
+ #include "ped_move_target_type.hpp"
+ #include "ped_attack_target_type.hpp"
+@@ -8888,8 +8891,15 @@ void Ped::FireAtPlayer_46A5E0()
+         return;
+     }
+ 
++#ifdef GTA2_PORT
++    // co-op (D20): the nearest player, the same on every computer (the original: this computer's player)
++    Ped* pPlayerPed = Gta2Port_NearestPlayerPed(field_16C_car->field_50_car_sprite->field_14_xy.x,
++                                                field_16C_car->field_50_car_sprite->field_14_xy.y);
++    if (pPlayerPed && !pPlayerPed->IsInvisibleOnFoot_433DA0())
++#else
+     Ped* pPlayerPed = gGame_0x40_67E008->field_38_orf1->field_2C4_player_ped;
+     if (!pPlayerPed->IsInvisibleOnFoot_433DA0())
++#endif
+     {
+         Sprite* pSprite_148 = field_16C_car->field_0_attachments.GetSpriteForModel_5A6A50(148)->field_0;
+         Fix16 x = pSprite_148->field_14_xy.x;
+@@ -11591,7 +11601,12 @@ void Ped::UpdateStatsForKiller_46F720()
+                     pGroup = this->field_1A8_ped_killer->field_164_ped_group;
+                     if (pGroup)
+                     {
++#ifdef GTA2_PORT
++                        // co-op (D20): the player whose group made the kill (the original: this computer's player)
++                        Ped* pLocalPed = Gta2Port_PlayerPedOfGroup(pGroup);
++#else
+                         Ped* pLocalPed = gGame_0x40_67E008->field_38_orf1->field_2C4_player_ped;
++#endif
+                         if (pLocalPed)
+                         {
+                             if (pGroup == pLocalPed->field_164_ped_group)
+diff --git a/Source/Police_38.cpp b/Source/Police_38.cpp
+index 7bf2bb2..1ac5c63 100644
+--- a/Source/Police_38.cpp
++++ b/Source/Police_38.cpp
+@@ -1,3 +1,6 @@
++#ifdef GTA2_PORT
++#include "port_coop.hpp"
++#endif
+ #include "Police_38.hpp"
+ #include "Car_BC.hpp"
+ #include "Char_Pool.hpp"
+@@ -2218,7 +2221,17 @@ void PoliceRoadblock_A4::Update_5757B0()
+                 {
+                     return;
+                 }
++#ifdef GTA2_PORT
++                // co-op (D20): the nearest player decides (the original: this computer's player)
++                Ped* field_2C4_player_ped = Gta2Port_NearestPlayerPed(Fix16(field_8_x), Fix16(field_9_y));
++                if (!field_2C4_player_ped)
++                {
++                    field_E = 0;
++                    return;
++                }
++#else
+                 Ped* field_2C4_player_ped = gGame_0x40_67E008->field_38_orf1->field_2C4_player_ped;
++#endif
+ 
+                 Fix16 fix_y = field_2C4_player_ped->get_cam_y();
+                 Fix16 fix_x = field_2C4_player_ped->get_cam_x();
+diff --git a/Source/port_coop.cpp b/Source/port_coop.cpp
+new file mode 100644
+index 0000000..fef6f8a
+--- /dev/null
++++ b/Source/port_coop.cpp
+@@ -0,0 +1,45 @@
++// Browser port, co-op (D20): see port_coop.hpp.
++#include "port_coop.hpp"
++
++#include "Game_0x40.hpp"
++#include "Ped.hpp"
++#include "Player.hpp"
++
++Ped* Gta2Port_NearestPlayerPed(Fix16 x, Fix16 y)
++{
++    Ped* best = nullptr;
++    s32 best_d = 0;
++    for (u8 i = 0; gGame_0x40_67E008 && i < GTA2_COUNTOF(gGame_0x40_67E008->field_4_players); ++i)
++    {
++        Player* p = gGame_0x40_67E008->field_4_players[i];
++        Ped* ped = p && p->field_8E_bInUse ? p->field_2C4_player_ped : nullptr;
++        if (!ped)
++        {
++            continue;
++        }
++        s32 dx = (ped->get_cam_x() - x).mValue, dy = (ped->get_cam_y() - y).mValue;
++        dx = dx < 0 ? -dx : dx;
++        dy = dy < 0 ? -dy : dy;
++        const s32 d = dx > dy ? dx : dy;
++        if (!best || d < best_d)
++        {
++            best = ped;
++            best_d = d;
++        }
++    }
++    return best;
++}
++
++Ped* Gta2Port_PlayerPedOfGroup(PedGroup* pGroup)
++{
++    for (u8 i = 0; pGroup && gGame_0x40_67E008 && i < GTA2_COUNTOF(gGame_0x40_67E008->field_4_players); ++i)
++    {
++        Player* p = gGame_0x40_67E008->field_4_players[i];
++        Ped* ped = p && p->field_8E_bInUse ? p->field_2C4_player_ped : nullptr;
++        if (ped && ped->field_164_ped_group == pGroup)
++        {
++            return ped;
++        }
++    }
++    return nullptr;
++}
+diff --git a/Source/port_coop.hpp b/Source/port_coop.hpp
+new file mode 100644
+index 0000000..31ddcaf
+--- /dev/null
++++ b/Source/port_coop.hpp
+@@ -0,0 +1,15 @@
++#pragma once
++// Browser port, co-op (D20): helpers for game logic that the original wrote for
++// "the player on this computer" (Game_0x40::field_38_orf1). In a lockstep
++// network game every computer must make the same choice, so these pick a player
++// from the game state instead. With one player they return that player.
++#include "fix16.hpp"
++
++class Ped;
++class PedGroup;
++
++// The player ped nearest to (x, y) (Chebyshev distance), or null when no player has a ped.
++Ped* Gta2Port_NearestPlayerPed(Fix16 x, Fix16 y);
++
++// The player ped whose group is pGroup (the player is the group's leader), or null.
++Ped* Gta2Port_PlayerPedOfGroup(PedGroup* pGroup);
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index 761a931..eecb995 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1651,10 +1651,14 @@ static bool PortNetworkInputsBegin()
+                 {
+                     gNetPlay_7071E8.DeletePlayerFromGroup_521000(player_idx);
+                     ShowPlayerLeftMessage_4DB070(player_idx);
+-                    if (!player_idx || player_idx == gNetworkPlayerIdx_6F56C8)
++                    // port (D20): the others play on when the host (player 0) leaves; there is no
++                    // DirectPlay session host to lose. The match only ends when this player is dropped.
++                    if (player_idx == gNetworkPlayerIdx_6F56C8)
+                     {
+                         gPlayerQuit_6F5AEC = 1;
+                     }
++                    // a player who left stands still instead of repeating their last inputs
++                    gCurrentNetInputs_6F57D8.field_0_inputs[player_idx].field_0_Inputs = 0;
+                 }
+             }
+             player_idx++;
+-- 
+2.53.0
+

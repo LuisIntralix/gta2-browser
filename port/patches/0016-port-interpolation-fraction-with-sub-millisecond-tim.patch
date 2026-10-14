@@ -1,0 +1,84 @@
+From bf63254aa05e6fb25cc265e02bdd467f584eeebd Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 18:59:40 +1100
+Subject: [PATCH 16/23] port: interpolation fraction with sub-millisecond time;
+ report the drawn player and camera positions
+
+---
+ Source/port_interpolation.cpp | 22 +++++++++++++++++++++-
+ Source/winmain.cpp            |  9 ++++++---
+ 2 files changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/Source/port_interpolation.cpp b/Source/port_interpolation.cpp
+index 4dbc60a..d97fe7a 100644
+--- a/Source/port_interpolation.cpp
++++ b/Source/port_interpolation.cpp
+@@ -17,7 +17,10 @@
+ // recomputed at the in-between position for drawing and restored byte for
+ // byte afterwards, so the simulation never sees in-between state.
+ #include "Camera.hpp"
++#include "Car_BC.hpp"
+ #include "Game_0x40.hpp"
++#include "Ped.hpp"
++#include "char.hpp"
+ #include "MapRenderer.hpp"
+ #include "Player.hpp"
+ #include "sprite.hpp"
+@@ -26,7 +29,8 @@
+ 
+ extern "C" {
+ s32 gGta2PortInterpolate = 1; // set from the shell
+-s32 gGta2PortDrawnCam[2];     // camera x, y (Fix16 raw) of the last draw, for measurements
++s32 gGta2PortDrawnCam[2];     // camera x, y (Fix16 raw) of the last draw (the shell's radar follows it)
++s32 gGta2PortDrawnPlayer[3];  // player x, y (Fix16 raw) and rotation (Ang16) as last drawn
+ }
+ 
+ namespace
+@@ -223,6 +227,22 @@ void Gta2Port_InterpBegin(f32 t, bool extra)
+         gGta2PortDrawnCam[0] = c->field_98_cam_pos2.field_0_x.mValue;
+         gGta2PortDrawnCam[1] = c->field_98_cam_pos2.field_4_y.mValue;
+     }
++    // where the player is drawn (the shell's radar and arrows use it to move as smoothly as the view)
++    if (gGame_0x40_67E008 && gGame_0x40_67E008->field_38_orf1)
++    {
++        if (Ped* ped = gGame_0x40_67E008->field_38_orf1->field_2C4_player_ped)
++        {
++            Car_BC* car = ped->get_car_416B60();
++            const Sprite* sp = car ? car->field_50_car_sprite
++                                   : (ped->field_168_game_object ? ped->field_168_game_object->field_80_sprite_ptr : nullptr);
++            if (sp)
++            {
++                gGta2PortDrawnPlayer[0] = sp->field_14_xy.x.mValue;
++                gGta2PortDrawnPlayer[1] = sp->field_14_xy.y.mValue;
++                gGta2PortDrawnPlayer[2] = sp->field_0.rValue;
++            }
++        }
++    }
+     if (extra && gpMapRenderer_6F66E4)
+     {
+         gSavedAmbient = gpMapRenderer_6F66E4->field_0_ambient;
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index d7cd529..6d4defa 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -1029,11 +1029,14 @@ MATCH_FUNC(0x4DA7B0)
+ #ifdef GTA2_PORT
+ // Display-rate interpolation (port_interpolation.cpp): how far the display is between the previous
+ // update and the last one, from the time left until the next update is due.
++extern "C" double gta2_port_now_ms();
+ static f32 PortInterpFraction()
+ {
+-    const s32 frame_ms = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
+-    const s32 until_next = static_cast<s32>(gMatchStartTime_6F5A28 - timeGetTime());
+-    const f32 t = 1.0f - static_cast<f32>(until_next) / static_cast<f32>(frame_ms);
++    // gta2_port_now_ms is the same clock as timeGetTime, with sub-millisecond precision: at 120 Hz a
++    // frame lasts 8.33 ms, and whole milliseconds made the in-between steps uneven.
++    const double frame_ms = gGame_0x40_67E008->GetFrameDurationMs_4B8BB0();
++    const double until_next = static_cast<double>(static_cast<s32>(gMatchStartTime_6F5A28)) - gta2_port_now_ms();
++    const f32 t = static_cast<f32>(1.0 - until_next / frame_ms);
+     return t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+ }
+ static DWORD sPortLastDrawMs;
+-- 
+2.53.0
+

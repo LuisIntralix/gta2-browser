@@ -1,0 +1,16 @@
+{
+  "name": "gta2-browser-server",
+  "private": true,
+  "description": "Private GTA2 browser-port server: the game, the game files and the co-op relay (D21)",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  }
+}

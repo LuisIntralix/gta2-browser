@@ -1,0 +1,228 @@
+From c59f16226658d8a3dcdd5aa8f9099d88b8b88b64 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 10:22:28 +1100
+Subject: [PATCH 07/23] port: run WinMain's message loop in per-frame slices
+ (Gta2Port_RunLoopSlice)
+
+---
+ Source/winmain.cpp | 190 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 190 insertions(+)
+
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index 7fbc3a2..ef61b28 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -2233,6 +2233,13 @@ EXPORT LRESULT __stdcall WindowProc_5E4EE0(HWND hWnd, UINT Msg, WPARAM wParam, L
+ }
+ 
+ MATCH_FUNC(0x5E53F0)
++#if defined(GTA2_PORT)
++#define GTA2_PORT_RUNNING 0x7FFFFFFF
++static s32 sPortState_Gta2;
++static u8 sPortQuit_Gta2;
++static u8 sPortRestart_Gta2 = 1;
++#endif
++
+ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, s32 nShowCmd)
+ {
+     //hInstance_ = hInstance;
+@@ -2353,6 +2360,10 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
+         gRegistry_6FF968.Clear_Or_Delete_Sound_Setting_586BF0("do_3d_sound", gRoot_sound_66B038.Get3DSound_40F180());
+     }
+ 
++#if defined(GTA2_PORT)
++    sPortState_Gta2 = state;
++    return GTA2_PORT_RUNNING; // the loop continues in Gta2Port_RunLoopSlice
++#endif
+     u8 bQuit = 0; //  %bl
+ 
+     while (1)
+@@ -2516,6 +2527,185 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
+     return 0;
+ }
+ 
++#if defined(GTA2_PORT)
++// Browser port: the body of WinMain_5E53F0's message loop, run in slices from
++// requestAnimationFrame instead of blocking. Unchanged except that "go to the
++// beginning" sets sPortRestart_Gta2 and each slice ends once a frame has been
++// presented (or after a 12 ms budget).
++extern "C" u32 gta2_port_present_count();
++extern "C" double gta2_port_now_ms();
++
++extern "C" s32 Gta2Port_RunLoopSlice()
++{
++    s32& state = sPortState_Gta2;
++    u8& bQuit = sPortQuit_Gta2;
++    const u32 presentsBefore = gta2_port_present_count();
++    const double sliceStart = gta2_port_now_ms();
++    while (gta2_port_present_count() == presentsBefore && gta2_port_now_ms() - sliceStart < 12.0)
++    {
++        if (sPortRestart_Gta2)
++        {
++            sPortRestart_Gta2 = 0;
++            bQuit = 0;
++        if (bDoFrontEnd_626B68)
++            {
++                Frontend::create_4ACFA0();
++                gFrontend_67DC84->ChangeMenuPage_4B3170(state);
++            }
++            else
++            {
++                InitializeGame_4DA4D0();
++                if (bStartNetworkGame_7081F0 && !gNetPlay_7071E8.WaitForPlayersSync_5213E0())
++                {
++                    CoUninitialize();
++                    return 0; // port: network sync failed
++                }
++            }
++
++            UpdateWinXY_5D8E70();
++            ApplyChangedScreenSettings_5D9690();
++
++        }
++
++            MSG msg;
++            if (PeekMessageA(&msg, 0, 0, 0, 1u))
++            {
++                if (msg.message == 18) // WM_QUIT
++                {
++                    Input::DInputRelease_498710();
++                    return msg.wParam;
++                }
++                TranslateMessage(&msg);
++                DispatchMessageA(&msg);
++            }
++            else
++            {
++                if (!bQuit && gMinimizedState_70827C != 2 && !bVideoModeResetPending_706C5D) //  line 3e4
++                {
++                    if (bDoFrontEnd_626B68)
++                    {
++                        s32 t = gFrontend_67DC84->Run_4AEDB0();
++
++                        if (t == Quit_1)
++                        {
++                            bQuit = Quit_1;
++                            Frontend::destroy_4AD070();
++                            DestroyWindow(gHwnd_707F04);
++                            continue; // go to PeekMessageA
++                        }
++                        else if (t == Start_Game_3)
++                        {
++                            Frontend::destroy_4AD070();
++                            bDoFrontEnd_626B68 = false;
++                            sPortRestart_Gta2 = 1;
++                            continue; // port: go to the beginning
++                        }
++                        else if (t == Start_Replay_4)
++                        {
++                            Frontend::destroy_4AD070();
++                            bDoFrontEnd_626B68 = false;
++                            bReplayMode_6F5B71 = true;
++                            sPortRestart_Gta2 = 1;
++                            continue; // port: go to the beginning
++                        }
++                        else
++                        {
++                            continue; // go to PeekMessageA
++                        }
++                    }
++                    bQuit = RunGameFrame_4DA850();
++
++                    if (bQuit)
++                    {
++                        if (bSkip_frontend_67D53B)
++                        {
++                            DestroyWindow(gHwnd_707F04);
++                        }
++                        else
++                        {
++                            if (bStartNetworkGame_7081F0)
++                            {
++                                switch (gGame_0x40_67E008->get_main_state_4D09C0())
++                                {
++                                    case 1:
++                                        DestroyWindow(gHwnd_707F04);
++                                        break;
++
++                                    default:
++                                        state = 7;
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++                                }
++                                sPortRestart_Gta2 = 1;
++                            continue; // port: go to the beginning
++                            }
++                            else
++                            {
++                                switch (gGame_0x40_67E008->get_main_state_4D09C0())
++                                {
++                                    case GameExitType::CloseGameImmediately_1:
++                                        DestroyWindow(gHwnd_707F04);
++                                        break;
++
++                                    case GameExitType::PlayerQuit_2:
++                                        gGameSession_67E8E0.StoreCrimeStats_4C5A10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateStageScore_56BB10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateHiScores_56C010();
++
++                                        state = gGameSession_67E8E0.IsBonusStage_4C59A0() != 0 ? 6 : 11; // 11? prob 1
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++
++                                    case GameExitType::GameOverRIP_3:
++                                        gGameSession_67E8E0.StoreCrimeStats_4C5A10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateStageScore_56BB10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateHiScores_56C010();
++                                        state = gGameSession_67E8E0.IsBonusStage_4C59A0() != 0 ? 6 : 2;
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++
++                                    case GameExitType::AreaCompleted_4:
++                                        gGameSession_67E8E0.StoreCrimeStats_4C5A10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateStageScore_56BB10(gGame_0x40_67E008->field_38_orf1);
++                                        gPlyDat_6FEAC0->UpdateHiScores_56C010();
++                                        state = gGameSession_67E8E0.IsBonusStage_4C59A0() != 0 ? 6 : 3;
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++
++                                    case GameExitType::MultiplayerExit_5:
++                                        state = 7;
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++
++                                    case GameExitType::ReplayExit_6:
++                                        state = 0;
++                                        CleanUpInputAndOthers_4DA700();
++                                        bDoFrontEnd_626B68 = 1;
++                                        break;
++
++                                    default:
++                                        break;
++                                }
++                                sPortRestart_Gta2 = 1;
++                            continue; // port: go to the beginning
++                            }
++                            //  nothing here
++                        }
++                        //  nothing here
++                    }
++                    // nothing here
++                }
++            }
++            }
++    return -1;
++}
++#endif
++
+ // TODO: order
+ MATCH_FUNC(0x4DA740)
+ EXPORT void __stdcall Shutdown_4DA740()
+-- 
+2.53.0
+

@@ -1,0 +1,210 @@
+From 0c1a632c6d37603fd01c674ddcea2b5bc865fde1 Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Tue, 13 Oct 2026 11:48:49 +1100
+Subject: [PATCH 10/23] port: widescreen presentation (4:3 projection scale,
+ wider tile and sprite ranges, centred HUD box, optional activation margin)
+
+---
+ Source/Camera.cpp         | 21 +++++++++++++++++++++
+ Source/Camera.hpp         | 29 +++++++++++++++++++++++++++++
+ Source/Game_0x40.cpp      | 12 ++++++++++++
+ Source/Hud.cpp            |  5 +++++
+ Source/MapRenderer.cpp    |  5 +++++
+ Source/SpriteGrid_400.cpp |  9 +++++++++
+ 6 files changed, 81 insertions(+)
+
+diff --git a/Source/Camera.cpp b/Source/Camera.cpp
+index 7303340..506a5c5 100644
+--- a/Source/Camera.cpp
++++ b/Source/Camera.cpp
+@@ -371,11 +371,25 @@ s32 Camera_0xBC::IsCoordsPosVisible_435A70(Fix16 x, Fix16 y, Fix16 z)
+ MATCH_FUNC(0x435B90)
+ void Camera_0xBC::UpdateBoundaries_435B90()
+ {
++#ifdef GTA2_PORT
++    // Widescreen: scale from the 4:3 width of the same height, so a wider screen shows more world
++    // horizontally instead of zooming in.
++    field_60.x = Fix16(PortRefWidth()) * field_98_cam_pos2.field_C_zoom;
++#else
+     field_60.x = Fix16(field_68_screen_px_width) * field_98_cam_pos2.field_C_zoom;
++#endif
+     field_60.y = Fix16(640) * field_98_cam_pos2.field_C_zoom;
+ 
+     Fix16 v = (dword_676838 + field_98_cam_pos2.field_8_z) * (kOne_67681C / field_98_cam_pos2.field_C_zoom) * dword_67671C;
+ 
++#ifdef GTA2_PORT
++    const Fix16 v_y = v;
++    if (gGta2PortWideActivation)
++    {
++        v += PortWideExtraX();
++    }
++#endif
++
+     field_78_boundaries_non_neg.field_0_left = field_98_cam_pos2.field_0_x - v;
+     if (field_78_boundaries_non_neg.field_0_left < kZero_676818)
+     {
+@@ -396,6 +410,9 @@ void Camera_0xBC::UpdateBoundaries_435B90()
+         field_78_boundaries_non_neg.field_4_right = kMaxMapCoord_67668C;
+     }
+ 
++#ifdef GTA2_PORT
++    v = v_y;
++#endif
+     v *= dword_6768E0;
+ 
+     field_78_boundaries_non_neg.field_8_top = field_98_cam_pos2.field_4_y - v;
+@@ -581,7 +598,11 @@ void Camera_0xBC::SetScreenSize_4361B0(u32 x_pos, u32 y_pos)
+     field_60.x = Fix16(-1);
+     field_60.y = Fix16(-1);
+ 
++#ifdef GTA2_PORT
++    field_A8_ui_scale = Fix16(y_pos) / 480; // same as x / 640 at 4:3
++#else
+     field_A8_ui_scale = Fix16(x_pos) / 640;
++#endif
+ }
+ 
+ 
+diff --git a/Source/Camera.hpp b/Source/Camera.hpp
+index 487652c..4520059 100644
+--- a/Source/Camera.hpp
++++ b/Source/Camera.hpp
+@@ -33,6 +33,13 @@ struct WorldRect
+     Fix16 field_C_bottom;
+ };
+ 
++#ifdef GTA2_PORT
++// Presentation activation margin (D07/D17): when set, a wide screen widens the camera boundaries the
++// simulation uses (spawning, on-screen and despawn checks) to the visible width, so nothing pops in
++// or out in view. A recorded gameplay deviation; 0 keeps the canonical 4:3 rectangle. Port layer.
++extern "C" s32 gGta2PortWideActivation;
++#endif
++
+ class Camera_0xBC
+ {
+   public:
+@@ -68,6 +75,28 @@ class Camera_0xBC
+     EXPORT void HandlePanning_436710(char_type a2, char_type a3, char_type a4, char_type a5);
+     EXPORT void ResetPanning_436830();
+     EXPORT void ApplyZOffsetToScreenPosition_436860(Ped* a2, Fix16& x_pos, Fix16& y_pos, Fix16 z_pos);
++#ifdef GTA2_PORT
++    // Widescreen presentation: the screen is wider than the 4:3 reference box of the same height.
++    s32 PortRefWidth() const
++    {
++        return field_6C_screen_px_height * 4 / 3;
++    }
++    // Horizontal offset of the centred 4:3 box (HUD space) inside the wide screen.
++    s32 PortHudOffsetX() const
++    {
++        return (field_68_screen_px_width - PortRefWidth()) / 2;
++    }
++    // World width (each side, at ground level) that a wide screen shows beyond the 4:3 view.
++    Fix16 PortWideExtraX() const
++    {
++        if (field_68_screen_px_width <= PortRefWidth() || field_98_cam_pos2.field_C_zoom <= Fix16(0))
++        {
++            return Fix16(0);
++        }
++        return (field_98_cam_pos2.field_8_z + Fix16(8)) / field_98_cam_pos2.field_C_zoom *
++            (field_68_screen_px_width - PortRefWidth()) / PortRefWidth() / 2;
++    }
++#endif
+     EXPORT Camera_0xBC(); // 4368E0
+     EXPORT ~Camera_0xBC(); // empty 4369E0
+     EXPORT void SetTarget_4397D0(Fix16 a2, Fix16 a3, Fix16 a4, Fix16 a5);
+diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
+index 355af99..14342ec 100644
+--- a/Source/Game_0x40.cpp
++++ b/Source/Game_0x40.cpp
+@@ -65,6 +65,11 @@
+ #include "text_0x14.hpp"
+ #include "winmain.hpp"
+ 
++#ifdef GTA2_PORT
++// port/render/frame.cpp: width of the frame in reference pixels and the HUD box offset.
++extern "C" void Gta2Port_SetFrameLayout(s32 width, s32 hudOffsetX);
++#endif
++
+ DEFINE_GLOBAL_INIT(Fix16, dword_67DECC, Fix16(5), 0x67DECC);
+ DEFINE_GLOBAL_INIT(Fix16, dword_67DFB4, dword_67DECC, 0x67DFB4);
+ DEFINE_GLOBAL(s32, gNetworkGameSpeed_7071A0, 0x7071A0);
+@@ -392,6 +397,10 @@ void Game_0x40::Draw_4B92D0()
+ 
+     pgbh_BeginScene();
+ 
++#ifdef GTA2_PORT
++    Gta2Port_SetFrameLayout(gViewCamera_676978->field_68_screen_px_width, 0);
++#endif
++
+     gpMapRenderer_6F66E4->Draw_4F6A20(); // Note: Also seems to draw sprites
+ 
+     if (!bExplodingScoresOff_67D4FB)
+@@ -399,6 +408,9 @@ void Game_0x40::Draw_4B92D0()
+         gExplodingScorePool->DrawExplodingScores_5969E0();
+     }
+ 
++#ifdef GTA2_PORT
++    Gta2Port_SetFrameLayout(gViewCamera_676978->field_68_screen_px_width, gViewCamera_676978->PortHudOffsetX());
++#endif
+     gHud_2B00_706620->DrawGui_5D6860(); // user
+ 
+     if (bDo_mike_67D5CC)
+diff --git a/Source/Hud.cpp b/Source/Hud.cpp
+index dbe84d1..563e647 100644
+--- a/Source/Hud.cpp
++++ b/Source/Hud.cpp
+@@ -118,7 +118,12 @@ static inline void DrawTextScaled_4C7280(const wchar_t* pStr, Fix16 x, Fix16 y,
+ static inline void ProjectWorldToScreen_Hud_4B90E0(Camera_0xBC* pCam, Fix16 x, Fix16 y, Fix16 z, Fix16* pOut1, Fix16* pOut2)
+ {
+     Fix16 scale = kFpOne_7064C4 / ((kFpEight_7064E8 - z) + pCam->field_98_cam_pos2.field_8_z);
++#ifdef GTA2_PORT
++    *pOut1 = (((x - pCam->field_98_cam_pos2.field_0_x) * pCam->field_60.x) * scale) +
++        Fix16(pCam->field_70_screen_px_center_x - pCam->PortHudOffsetX());
++#else
+     *pOut1 = (((x - pCam->field_98_cam_pos2.field_0_x) * pCam->field_60.x) * scale) + Fix16(pCam->field_70_screen_px_center_x);
++#endif
+     *pOut2 = (((y - pCam->field_98_cam_pos2.field_4_y) * pCam->field_60.x) * scale) + Fix16(pCam->field_74_screen_px_center_y);
+ }
+ 
+diff --git a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
+index 40f965c..077d535 100644
+--- a/Source/MapRenderer.cpp
++++ b/Source/MapRenderer.cpp
+@@ -3554,7 +3554,12 @@ void MapRenderer::Draw_4F6A20()
+             Fix16 layer_column_width = layer_row_width * kScreenAspectRatio_6F638C;
+ 
+             // compute x boundary
++#ifdef GTA2_PORT
++            // Widescreen: cover the extra width (presentation only).
++            Fix16 half_x = layer_row_width * gViewCamera_676978->field_68_screen_px_width / gViewCamera_676978->PortRefWidth() / 2;
++#else
+             Fix16 half_x = layer_row_width / 2;
++#endif
+             s32 min_x = (gViewCamera_676978->field_98_cam_pos2.field_0_x - half_x).ToInt();
+             s32 max_x = (gViewCamera_676978->field_98_cam_pos2.field_0_x + half_x).ToInt();
+ 
+diff --git a/Source/SpriteGrid_400.cpp b/Source/SpriteGrid_400.cpp
+index 753f428..3fce54e 100644
+--- a/Source/SpriteGrid_400.cpp
++++ b/Source/SpriteGrid_400.cpp
+@@ -62,8 +62,17 @@ static inline s32 Clamp(s32 value, s32 min, s32 max)
+ MATCH_FUNC(0x477a40)
+ void SpriteGrid_400::DrawSpritesClipped_477A40()
+ {
++#ifdef GTA2_PORT
++    // Widescreen: existing sprites are drawn in the extra width. Without the activation margin only
++    // this draw pass widens; the boundaries that drive spawning and activation keep their 4:3 size.
++    const Camera_0xBC* pCam = gViewCamera_676978;
++    const Fix16 extra = gGta2PortWideActivation ? Fix16(0) : pCam->PortWideExtraX();
++    const s32 left = Clamp((pCam->field_78_boundaries_non_neg.field_0_left - kFpOne_679084 - extra).ToInt(), 0, 255);
++    const s32 right_val = Clamp((kFpOneAndHalf_678F80 + pCam->field_78_boundaries_non_neg.field_4_right + extra).ToInt(), 0, 255);
++#else
+     const s32 left = Clamp((gViewCamera_676978->field_78_boundaries_non_neg.field_0_left - kFpOne_679084).ToInt(), 0, 255);
+     const s32 right_val = Clamp((kFpOneAndHalf_678F80 + gViewCamera_676978->field_78_boundaries_non_neg.field_4_right).ToInt(), 0, 255);
++#endif
+     const s32 top_val = Clamp((gViewCamera_676978->field_78_boundaries_non_neg.field_8_top - kFpOne_679084).ToInt(), 0, 255);
+     const s32 bottom_val = Clamp((kFpOneAndHalf_678F80 + gViewCamera_676978->field_78_boundaries_non_neg.field_C_bottom).ToInt(), 0, 255);
+ 
+-- 
+2.53.0
+

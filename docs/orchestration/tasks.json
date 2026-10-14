@@ -1,0 +1,1621 @@
+{
+  "schema_version": 1,
+  "spec_version": "1.1",
+  "created_date": "2026-10-12",
+  "timezone": "Australia/Sydney",
+  "purpose": "Dependency plan for later orchestrated execution; not a running scheduler",
+  "spec": "docs/orchestration/gta2-browser-spec.md",
+  "source_revision": "02de8beeb766644417f195d360eba33af0ee491f",
+  "execution_started": true,
+  "project_token_limit": null,
+  "max_workers": 3,
+  "requirements": [
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08"
+  ],
+  "phases": [
+    "slice",
+    "single_player",
+    "coop",
+    "quality"
+  ],
+  "routes": {
+    "worker": {
+      "model": "gpt-6.1-sol",
+      "reasoning": "medium"
+    },
+    "reviewer": {
+      "model": "gpt-6.1-sol",
+      "reasoning": "high"
+    },
+    "specialist": {
+      "model": "gpt-6-astra",
+      "reasoning": "high"
+    },
+    "complex_worker": {
+      "model": "gpt-6.1-sol",
+      "reasoning": "high"
+    },
+    "verification": {
+      "model": "gpt-6.1-sol",
+      "reasoning": "high"
+    }
+  },
+  "orchestrator": {
+    "model": "gpt-6-astra",
+    "reasoning": "high",
+    "fallback": "gpt-6.1-sol/high with specialist review retained when available"
+  },
+  "forbidden_research_models": [
+    "gpt-6-luna",
+    "gpt-5.6-luna"
+  ],
+  "packet_policy": {
+    "default_token_limit": 250000,
+    "max_token_limit_with_scope_justification": 750000,
+    "warning_fraction": 0.8,
+    "same_blocker_attempt_limit": 2,
+    "fallback_call_limit_when_usage_unknown": 20,
+    "epics_must_be_expanded": true,
+    "independent_review_required": true
+  },
+  "planning_tokens_millions": {
+    "slice": [
+      5,
+      15
+    ],
+    "single_player": [
+      35,
+      110
+    ],
+    "coop": [
+      60,
+      200
+    ],
+    "quality": [
+      20,
+      80
+    ],
+    "total_before_reserve": [
+      120,
+      405
+    ],
+    "total_with_reserve": [
+      160,
+      550
+    ]
+  },
+  "gates": {
+    "G0": {
+      "tasks": [
+        "T00",
+        "T01"
+      ],
+      "meaning": "bootstrap and bounded permissions inventory; not permission clearance"
+    },
+    "G1": {
+      "tasks": [
+        "T02",
+        "T03",
+        "T04"
+      ],
+      "meaning": "Fixed contracts and original 9.6F runtime capture; no native reconstruction build prerequisite"
+    },
+    "G2": {
+      "tasks": [
+        "T13"
+      ],
+      "meaning": "playable browser slice and reforecast"
+    },
+    "G3": {
+      "tasks": [
+        "T17"
+      ],
+      "meaning": "complete single player"
+    },
+    "G4": {
+      "tasks": [
+        "T23",
+        "T24"
+      ],
+      "meaning": "cooperative slice and network validation"
+    },
+    "G5": {
+      "tasks": [
+        "T26"
+      ],
+      "meaning": "cooperative campaign"
+    },
+    "G6": {
+      "tasks": [
+        "T32"
+      ],
+      "meaning": "release candidate accepted, not published"
+    }
+  },
+  "tasks": [
+    {
+      "id": "T00",
+      "title": "Bootstrap isolated workspace and execution ledger",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "docs/orchestration/runs/<run>/",
+        ".gitignore",
+        "CMakeLists.txt",
+        "CMakePresets.json",
+        "scripts/build/"
+      ],
+      "deliverables": [
+        "baseline manifest",
+        "Git/ignore inspection",
+        "tool and runtime inventory",
+        "run task state and usage ledger",
+        "Documented build/check command entry points and stage-specific missing-target errors",
+        "Selected scripts/build_port.py, scripts/check_port.py and scripts/serve_port.py entry points from D02"
+      ],
+      "acceptance": [
+        "Pinned SHA and SDK match audit or drift is explicitly reviewed",
+        "No game assets, binaries, dumps or SDK packages staged",
+        "Actual concurrency, available models and configured spending limits recorded",
+        "Local Git baseline or explicit safe disjoint-path fallback exists"
+      ],
+      "requirements": [
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D02",
+        "D03",
+        "D16"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Workspace, git, ledger and docs in place."
+    },
+    {
+      "id": "T01",
+      "title": "Record component provenance and reuse permissions",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T00"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "docs/decisions/permissions.md"
+      ],
+      "deliverables": [
+        "component/source/dependency notice matrix",
+        "per-component unresolved permission entries"
+      ],
+      "acceptance": [
+        "No blanket MIT or clean-room claim",
+        "Hook/injection dependencies excluded from intended browser closure",
+        "Unknown rights are recorded as unknown; task acceptance does not clear release",
+        "Distribution gate has explicit evidence owner and required resolution"
+      ],
+      "requirements": [
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D16"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "unshield MIT and Emscripten recorded; gta2_re has no licence file (noted in LICENSE and README)."
+    },
+    {
+      "id": "T02",
+      "title": "Extract local files and establish compatibility profile",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [
+        "T00"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "game/",
+        "research/runtime-data/inventory/",
+        "docs/contracts/assets-v1.md"
+      ],
+      "deliverables": [
+        "installer checksum record",
+        "file/hash/format inventory",
+        "version compatibility profile"
+      ],
+      "acceptance": [
+        "Installer MD5 matches before and after extraction",
+        "Extraction writes only allowed local directories",
+        "9.6F data versus 10.5 reconstruction compatibility tested or precise incompatibility recorded",
+        "No original EXE downloaded as a silent workaround"
+      ],
+      "requirements": [
+        "R01",
+        "R02"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D06",
+        "D08"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Installer extracted reproducibly into game/ with a SHA-256 manifest (344 files)."
+    },
+    {
+      "id": "T03",
+      "title": "Capture the original 9.6F Windows gameplay reference",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T02"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "research/runtime-data/reference/",
+        "docs/decisions/reference.md",
+        "scripts/capture/reference/"
+      ],
+      "deliverables": [
+        "Windows reference host and executable/data hashes",
+        "Original boot/walk/drive/mission-start capture",
+        "Scripted controls plus video/event annotation procedure"
+      ],
+      "acceptance": [
+        "Locally supplied original game actually runs on selected Windows host",
+        "Walk, drive and mission-start observations record build/data/settings",
+        "No original replay or injection oracle assumed",
+        "Missing reference host is a named access blocker; no Wine/VC6/10.5 acquisition detour"
+      ],
+      "requirements": [
+        "R02"
+      ],
+      "constraints": [
+        "No source reconstruction build required here; standalone whole-game test occurs in browser at G2",
+        "No runtime/tool purchase or Ghidra installation inferred"
+      ],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "The original 9.6F runs under Wine (reference-runtime.md). No audio there; there is a memory-dump tool."
+    },
+    {
+      "id": "T04",
+      "title": "Implement the locked interface contracts and conformance checks",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "requires_gates": [],
+      "route": "complex_worker",
+      "write_paths": [
+        "docs/contracts/",
+        "port/include/",
+        "docs/decisions/architecture.md"
+      ],
+      "deliverables": [
+        "platform/render/simulation/save/network interface versions",
+        "fixed-width types and ownership/error contracts",
+        "D01–D16 conformance cross-reference; no architecture selection"
+      ],
+      "acceptance": [
+        "Each interface specifies units, lifetime, error behavior and serialization boundaries",
+        "Simulation tick/reference policy explicit",
+        "Parallel worker path leases and integration build ownership fixed",
+        "No game behavior or Windows emulation hidden in interface stubs"
+      ],
+      "requirements": [
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D02",
+        "D03",
+        "D04",
+        "D05",
+        "D06",
+        "D07",
+        "D09",
+        "D10",
+        "D12"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Renderer/video export table type-checked against the game typedefs; no formal conformance suite."
+    },
+    {
+      "id": "T05",
+      "title": "Make arithmetic and RNG behavior explicit",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T04"
+      ],
+      "requires_gates": [],
+      "route": "complex_worker",
+      "write_paths": [
+        "port/core/numeric/",
+        "tests/unit/numeric/",
+        "docs/decisions/arithmetic.md"
+      ],
+      "deliverables": [
+        "signed arithmetic/ABI/RNG decision record",
+        "portable implementations or bounded patches",
+        "boundary-vector and replay checks"
+      ],
+      "acceptance": [
+        "Known negative-shift regression passes UBSan in fixed code; original probe retained",
+        "Negative values, overflow boundaries, conversions and layout assumptions tested",
+        "Selected RNG sequence and explicit arithmetic fixtures pass; original parity comparison is verified in T12 before claim",
+        "Same logical-state hashing on native test target and wasm32"
+      ],
+      "requirements": [
+        "R02",
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D04",
+        "D05"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "WebAssembly arithmetic is deterministic, but RNG/float behaviour is not yet audited against the original."
+    },
+    {
+      "id": "T06",
+      "title": "Create browser core target without Windows hooks",
+      "phase": "slice",
+      "kind": "epic",
+      "status": "done",
+      "depends_on": [
+        "T04",
+        "T05"
+      ],
+      "requires_gates": [],
+      "route": "complex_worker",
+      "write_paths": [
+        "port/core/",
+        "scripts/build/",
+        "research/port-work/"
+      ],
+      "deliverables": [
+        "pinned source adaptation/build procedure",
+        "browser core target",
+        "unresolved platform symbol inventory"
+      ],
+      "acceptance": [
+        "Owned core target compiles and links with local Emscripten",
+        "No Win32 DLL loader, DirectPlay, original EXE fallback or fake successful services",
+        "Source checkout untouched and provenance recorded",
+        "Core numeric tests execute in browser"
+      ],
+      "requirements": [
+        "R02",
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D02",
+        "D03",
+        "D05"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "108 gta2_re sources build to wasm32 with 14 GTA2_PORT patches."
+    },
+    {
+      "id": "T07",
+      "title": "Build local asset import and validation",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T02",
+        "T04"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "web/import/",
+        "tests/browser/import/",
+        "tests/unit/import/"
+      ],
+      "deliverables": [
+        "directory and archive/file fallback importer",
+        "local validated asset manifest"
+      ],
+      "acceptance": [
+        "Required/profile-mismatched files produce useful errors",
+        "Malformed/traversal/oversize fixture tests pass",
+        "Imported assets remain local and excluded from builds",
+        "Browser storage and import progress visible"
+      ],
+      "requirements": [
+        "R01",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D06"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Folder picker plus core-file check, browser copy, freeware download verified by SHA-1 (332/332 files exact). No full profile check for a picked folder."
+    },
+    {
+      "id": "T08",
+      "title": "Implement browser lifecycle input clock and filesystem",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [
+        "T04"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/platform/",
+        "web/shell/",
+        "tests/browser/platform/"
+      ],
+      "deliverables": [
+        "real platform adapters",
+        "browser shell"
+      ],
+      "acceptance": [
+        "Tick/input sampling and pause/focus behavior covered",
+        "No stuck keys on focus loss; remapping and fullscreen work",
+        "File failures return explicit errors",
+        "Unsupported services fail visibly rather than succeeding as no-ops"
+      ],
+      "requirements": [
+        "R01",
+        "R04",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D03",
+        "D04",
+        "D06"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Main-loop slices, DirectInput over DOM, in-memory registry, MEMFS, pause."
+    },
+    {
+      "id": "T09",
+      "title": "Implement WebGL2 rendering for the gameplay slice",
+      "phase": "slice",
+      "kind": "epic",
+      "status": "done",
+      "depends_on": [
+        "T04",
+        "T06"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/render/",
+        "tests/browser/render/"
+      ],
+      "deliverables": [
+        "renderer backend",
+        "real district/vehicle/ped render captures"
+      ],
+      "acceptance": [
+        "Geometry, palettes, sprites/deltas, blend/order, lighting and camera checked against local reference",
+        "Viewport resize and context loss/recovery exercised",
+        "Render path does not mutate simulation",
+        "No D3D9 dependency in browser target"
+      ],
+      "requirements": [
+        "R02",
+        "R06",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D03",
+        "D07"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "WebGL2 renderer: 62 gbh/Vid functions, content-addressed textures, widescreen frames."
+    },
+    {
+      "id": "T10",
+      "title": "Implement real audio and original video paths",
+      "phase": "slice",
+      "kind": "epic",
+      "status": "partial",
+      "depends_on": [
+        "T02",
+        "T04"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/audio/",
+        "web/media/",
+        "tests/browser/media/"
+      ],
+      "deliverables": [
+        "sound/music/video adapters",
+        "local decode/import approach"
+      ],
+      "acceptance": [
+        "Sound events, spatial levels, loops, radio/music and original video content tested",
+        "User-gesture activation, pause/resume and mute/volume work",
+        "No Miles/Bink shim used as functional implementation",
+        "Converted media stays local and out of release bundle"
+      ],
+      "requirements": [
+        "R02",
+        "R04",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D08"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Effects, speech and radio over Web Audio. Bink movies are skipped."
+    },
+    {
+      "id": "T11",
+      "title": "Implement transactional versioned browser saves",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T04",
+        "T06",
+        "T08"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/platform/save/",
+        "web/save/",
+        "tests/browser/save/"
+      ],
+      "deliverables": [
+        "versioned persistence",
+        "export/import recovery"
+      ],
+      "acceptance": [
+        "Save/reload restores logical world/script/player/RNG state",
+        "Interrupted write preserves previous valid save",
+        "Storage-full, corrupt and newer-version errors handled",
+        "SP and co-op namespaces separate"
+      ],
+      "requirements": [
+        "R03"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D09"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "IndexedDB saves with previous version kept, export/import, church save and resume verified. No deeper state comparison yet."
+    },
+    {
+      "id": "T12",
+      "title": "Create trustworthy capture and comparison harness",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T03",
+        "T04",
+        "T05"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "tests/replay/",
+        "scripts/capture/",
+        "docs/contracts/reference-fixtures.md"
+      ],
+      "deliverables": [
+        "input/state/event capture runner",
+        "reference comparison criteria"
+      ],
+      "acceptance": [
+        "Known intentional mismatch is detected",
+        "Selected scripted controls/video/event route works; original replay compatibility is outside v1",
+        "Discrete mission events exact; any tolerance field-specific and reviewed",
+        "Game-derived fixtures ignored and runtime versions/hashes retained",
+        "Original numeric/RNG disagreement is a bounded specialist finding; do not replace oracle expectations to obtain a pass"
+      ],
+      "requirements": [
+        "R02",
+        "R03"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D01",
+        "D04",
+        "D05"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Soak and camera acceptance harnesses exist; no image comparison against the reference runtime."
+    },
+    {
+      "id": "T13",
+      "title": "Integrate and accept the playable browser slice",
+      "phase": "slice",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+        "T11",
+        "T12"
+      ],
+      "requires_gates": [
+        "G1"
+      ],
+      "route": "worker",
+      "write_paths": [
+        "tests/browser/slice/",
+        "docs/orchestration/runs/<run>/g2/"
+      ],
+      "deliverables": [
+        "G2 demo and evidence",
+        "measured usage/forecast update"
+      ],
+      "acceptance": [
+        "Real district import, walking, driving, shooting, original mission completion and save/reload work",
+        "Working audio and 15-minute crash-free session",
+        "Chrome plus non-Chromium pass",
+        "No original-code fallback or mock assets counted",
+        "Reforecast remaining phases using measured packets"
+      ],
+      "requirements": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D02",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Playable slice accepted: walking, driving, shooting, missions (owner played 15+ min), saves, audio, Chromium and Firefox."
+    },
+    {
+      "id": "T14",
+      "title": "Inventory all campaign and bonus acceptance cases",
+      "phase": "single_player",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T02",
+        "T03"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "tests/campaign/catalog/",
+        "docs/contracts/campaign-catalog.md"
+      ],
+      "deliverables": [
+        "full content and branch catalog",
+        "SP/co-op coverage matrix"
+      ],
+      "acceptance": [
+        "Every discovered district/mission/bonus has a row, prerequisites and expected outcomes",
+        "Include failure/retry, save boundaries and unusual actor/control commands",
+        "Unknowns remain untested; no guessed mission list",
+        "No original scripts/assets embedded in publishable fixtures"
+      ],
+      "requirements": [
+        "R02",
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D13",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Campaign/bonus inventory not written."
+    },
+    {
+      "id": "T15",
+      "title": "Resolve core system and standalone behavior gaps",
+      "phase": "single_player",
+      "kind": "epic",
+      "status": "in_progress",
+      "depends_on": [
+        "T13",
+        "T14"
+      ],
+      "requires_gates": [
+        "G2"
+      ],
+      "route": "worker",
+      "write_paths": [
+        "port/core/",
+        "tests/unit/",
+        "tests/replay/cases/"
+      ],
+      "deliverables": [
+        "bounded bug packets by subsystem",
+        "vehicle/AI/train/map/script regression evidence"
+      ],
+      "acceptance": [
+        "Investigate audit WIPs, train globals, texture bounds and fake-match concerns by evidence",
+        "Each behavior fix has a meaningful reference-based regression",
+        "Known variable issues classified/resolved where relevant",
+        "No regression to accepted slice"
+      ],
+      "requirements": [
+        "R02"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D04",
+        "D05",
+        "D07"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Static tables, zeroed data tables (controls, pan, horns, trailers) and music-CD scan fixed. Attract demo, Bink and a second global audit are open."
+    },
+    {
+      "id": "T16",
+      "title": "Complete single-player campaign parity",
+      "phase": "single_player",
+      "kind": "epic",
+      "status": "in_progress",
+      "depends_on": [
+        "T15",
+        "T14"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "tests/campaign/single-player/",
+        "port/core/",
+        "port/platform/"
+      ],
+      "deliverables": [
+        "mission-by-mission child packets",
+        "full SP coverage and fixes"
+      ],
+      "acceptance": [
+        "All original campaign and bonus rows pass including failure/retry/save cases",
+        "All three districts and progression transitions tested",
+        "Original media/menu/English text behavior complete",
+        "No omitted missions or silently disabled opcodes"
+      ],
+      "requirements": [
+        "R02",
+        "R03",
+        "R04"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D09",
+        "D13"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "All three districts load and run; missions played by the owner; not every mission verified."
+    },
+    {
+      "id": "T17",
+      "title": "Independently accept single-player completeness",
+      "phase": "single_player",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T16"
+      ],
+      "requires_gates": [],
+      "route": "reviewer",
+      "write_paths": [
+        "docs/orchestration/runs/<run>/g3/",
+        "tests/campaign/reviews/"
+      ],
+      "deliverables": [
+        "full standalone campaign playthrough report",
+        "SP acceptance matrix"
+      ],
+      "acceptance": [
+        "Reviewer reruns representative hard cases and inspects entire coverage matrix",
+        "Full campaign playthrough observed",
+        "No progression blockers, save corruption or untested required rows",
+        "Numeric/semantic deviations explicitly approved and covered"
+      ],
+      "requirements": [
+        "R02",
+        "R03"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T18",
+      "title": "Verify the fixed host-star WebRTC protocol with two peers",
+      "phase": "coop",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T13",
+        "T04"
+      ],
+      "requires_gates": [
+        "G2"
+      ],
+      "route": "complex_worker",
+      "write_paths": [
+        "docs/decisions/network.md",
+        "docs/contracts/network-v1.md",
+        "research/port-work/network-spike/"
+      ],
+      "deliverables": [
+        "Two-peer conformance prototype",
+        "Recorded selected tick/channel/message limits",
+        "Measured latency/bandwidth and failures against D10–D12"
+      ],
+      "acceptance": [
+        "Three prescribed channels and host-star topology work",
+        "33 ms snapshots and D12 bounds/ACK/resync pass",
+        "No client simulation/prediction/rollback",
+        "No alternate transport or authority design introduced",
+        "TURN and selected deployment prerequisites recorded"
+      ],
+      "requirements": [
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D10",
+        "D11",
+        "D12",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "D20 replaced the host-star snapshot design with lockstep. Two peers verified 13 Oct 2026: a two-tab match over WebRTC data channels (Trystero, public WebTorrent trackers) ran 285 ticks with every message delivered and identical ped/car checksums on both sides; movement of each player seen by the other. Not yet measured across the internet; TURN not provided."
+    },
+    {
+      "id": "T19",
+      "title": "Implement private rooms and signaling service",
+      "phase": "coop",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T18"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "services/signaling/",
+        "web/rooms/",
+        "tests/unit/signaling/"
+      ],
+      "deliverables": [
+        "room/invite lifecycle",
+        "local service runbook"
+      ],
+      "acceptance": [
+        "Two/four clients join only intended room; expiry and leave work",
+        "Bounded message sizes, validation and basic resource limits",
+        "No game assets transmitted or persisted",
+        "Secrets/config separated and no paid/public deployment performed"
+      ],
+      "requirements": [
+        "R05",
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D11",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "D20: private rooms are room codes (the code is also the password for the connection set-up); no signalling service of ours, public WebTorrent trackers introduce the players."
+    },
+    {
+      "id": "T20",
+      "title": "Implement authoritative inputs snapshots and recovery",
+      "phase": "coop",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T18",
+        "T06"
+      ],
+      "requires_gates": [],
+      "route": "complex_worker",
+      "write_paths": [
+        "port/net/protocol/",
+        "port/net/host/",
+        "tests/unit/network/"
+      ],
+      "deliverables": [
+        "versioned protocol and host state replication",
+        "snapshot repair and input validation"
+      ],
+      "acceptance": [
+        "Logical schema independent of native pointers/padding",
+        "Duplicate, stale, malformed and unauthorized commands rejected safely",
+        "Late input policy and baseline repair covered",
+        "Save/restored authoritative state and RNG stable",
+        "Exact D12 envelope and acknowledged-baseline/backpressure rules used"
+      ],
+      "requirements": [
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D10",
+        "D11",
+        "D12"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Superseded by D20 (lockstep: only inputs are exchanged, no snapshots)."
+    },
+    {
+      "id": "T21",
+      "title": "Implement presentation-only clients and snapshot interpolation",
+      "phase": "coop",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T19",
+        "T20"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/net/client/",
+        "web/rooms/client/",
+        "tests/browser/multiclient/"
+      ],
+      "deliverables": [
+        "Presentation-only client using local assets",
+        "66 ms interpolation and bounded visual extrapolation",
+        "Two/four client runner"
+      ],
+      "acceptance": [
+        "Correct ownership and input sequence handling",
+        "Clients agree at same authoritative snapshot tick",
+        "No physics prediction, local mission VM or rollback; visual extrapolation bounded to one tick",
+        "Pause/hidden host, timeout and resync visible"
+      ],
+      "requirements": [
+        "R05",
+        "R06"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D07",
+        "D10",
+        "D12"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Superseded by D20 (lockstep: every player runs the full game)."
+    },
+    {
+      "id": "T22",
+      "title": "Implement cooperative mission authority policies",
+      "phase": "coop",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T14",
+        "T18"
+      ],
+      "requires_gates": [],
+      "route": "complex_worker",
+      "write_paths": [
+        "port/coop/policies/",
+        "docs/contracts/coop-rules.md",
+        "tests/unit/coop/"
+      ],
+      "deliverables": [
+        "actor/team trigger policy",
+        "shared progression and failure/reconnect policies"
+      ],
+      "acceptance": [
+        "Local-player command bug addressed with explicit target semantics",
+        "Simultaneous triggers/rewards handled once and deterministically",
+        "Actor/non-actor death/arrest/disconnect behavior matches spec",
+        "Guests cannot commit campaign state; SP saves unaffected",
+        "Shared reward credited once total; default implicit opcode target is mission actor; D13/D14 exceptions explicit"
+      ],
+      "requirements": [
+        "R05",
+        "R03"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D09",
+        "D13",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T23",
+      "title": "Integrate two and four player cooperative slice",
+      "phase": "coop",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T21",
+        "T22"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "tests/browser/coop-slice/",
+        "docs/orchestration/runs/<run>/g4-slice/"
+      ],
+      "deliverables": [
+        "custom mission integration",
+        "two/four client evidence"
+      ],
+      "acceptance": [
+        "Phones, control locks, vehicles, actor/non-actor failures and competing triggers covered",
+        "Shared rewards/save/reload/reconnect work",
+        "Real clients, not simulated packet-only success",
+        "No SP slice regression"
+      ],
+      "requirements": [
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D10",
+        "D12",
+        "D13",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T24",
+      "title": "Validate latency loss TURN and reconnect",
+      "phase": "coop",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T23"
+      ],
+      "requires_gates": [],
+      "route": "reviewer",
+      "write_paths": [
+        "tests/browser/network-conditions/",
+        "docs/orchestration/runs/<run>/network/"
+      ],
+      "deliverables": [
+        "network impairment profiles and measured outcomes",
+        "internet/TURN evidence"
+      ],
+      "acceptance": [
+        "Spec network matrix executed including two machines and internet locations",
+        "No permanent divergence, duplicate reward or mission deadlock",
+        "100ms RTT action latency target measured",
+        "Unavailable internet/TURN access blocks that acceptance row explicitly"
+      ],
+      "requirements": [
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D11",
+        "D12",
+        "D14",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T25",
+      "title": "Adapt every campaign mission for cooperative play",
+      "phase": "coop",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T16",
+        "T14",
+        "T24"
+      ],
+      "requires_gates": [
+        "G4"
+      ],
+      "route": "complex_worker",
+      "write_paths": [
+        "port/coop/missions/",
+        "tests/campaign/coop/"
+      ],
+      "deliverables": [
+        "per-mission adaptation packets",
+        "explicit actor/team/respawn exceptions"
+      ],
+      "acceptance": [
+        "Every campaign catalog row has co-op policy and passed two-client behavior",
+        "No mission skipped or globally replaced by deathmatch",
+        "Required-player changes cannot deadlock triggers",
+        "Original script assets remain local; adapters have provenance"
+      ],
+      "requirements": [
+        "R02",
+        "R05"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "specialist",
+      "decision_ids": [
+        "D13",
+        "D14"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T26",
+      "title": "Independently accept full cooperative campaign",
+      "phase": "coop",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T25"
+      ],
+      "requires_gates": [],
+      "route": "reviewer",
+      "write_paths": [
+        "tests/campaign/coop-review/",
+        "docs/orchestration/runs/<run>/g5/"
+      ],
+      "deliverables": [
+        "full four-player playthrough",
+        "co-op acceptance matrix"
+      ],
+      "acceptance": [
+        "All campaign rows pass two-player and system/branch cases repeat four-player",
+        "Full four-player campaign playthrough observed",
+        "Host-owned progress/save and actor reconnect cases pass",
+        "No SP regression or unresolved progression/data-loss defect"
+      ],
+      "requirements": [
+        "R05",
+        "R03"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D09",
+        "D13",
+        "D14",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T27",
+      "title": "Complete widescreen camera HUD and display settings",
+      "phase": "quality",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [
+        "T09",
+        "T13"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/render/presentation/",
+        "web/settings/",
+        "tests/browser/display/"
+      ],
+      "deliverables": [
+        "1080p/1440p display modes",
+        "camera/HUD/readability evidence"
+      ],
+      "acceptance": [
+        "Aspect correct and actual render resolution recorded",
+        "HUD scales/readable and menus usable",
+        "Wider view does not change triggers or simulation cadence",
+        "Culling/render changes retain reference visual behavior",
+        "Preserve 640x480 reference vertical span and separate canonical gameplay cameras per D07"
+      ],
+      "requirements": [
+        "R04",
+        "R06"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D07"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Widescreen at any aspect with activation margin, HUD edge anchoring, Modern camera (zoom pumping fix), view distance, full screen, display-rate interpolation (120 fps on a 120 Hz screen, D04)."
+    },
+    {
+      "id": "T28",
+      "title": "Build reproducible performance measurement suite",
+      "phase": "quality",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T13",
+        "T00"
+      ],
+      "requires_gates": [],
+      "route": "verification",
+      "write_paths": [
+        "tests/perf/",
+        "docs/contracts/performance-baseline.md"
+      ],
+      "deliverables": [
+        "hardware/browser manifest",
+        "scene and metric harness"
+      ],
+      "acceptance": [
+        "Exact hardware and browser versions recorded",
+        "Warm-up, duration, scene and frame percentile definitions match spec",
+        "Collector validated against profiler; unavailable metrics marked",
+        "Missing baseline hardware remains explicit"
+      ],
+      "requirements": [
+        "R06",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D04",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "FPS readout, soak frame/memory capture, camera metrics; no automated performance suite."
+    },
+    {
+      "id": "T29",
+      "title": "Profile and optimize full single and cooperative game",
+      "phase": "quality",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T17",
+        "T26",
+        "T27",
+        "T28"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "port/",
+        "web/",
+        "tests/perf/results/"
+      ],
+      "deliverables": [
+        "profile-led bounded optimization packets",
+        "before/after metrics"
+      ],
+      "acceptance": [
+        "All requested resolutions and scene classes meet frame targets on baselines",
+        "No changes to simulation speed or fidelity to improve FPS",
+        "Follow D15 optimization order; no v1 threads, dynamic resolution or simulation reduction without a specific orchestrator amendment",
+        "Regression suite passes after each accepted optimization"
+      ],
+      "requirements": [
+        "R06",
+        "R07"
+      ],
+      "constraints": [
+        "Expand into disjoint owned-path children; port/ and web/ are not concurrent blanket write leases"
+      ],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D03",
+        "D07",
+        "D08",
+        "D12",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T30",
+      "title": "Run browser matrix soak and recovery acceptance",
+      "phase": "quality",
+      "kind": "epic",
+      "status": "planned",
+      "depends_on": [
+        "T29"
+      ],
+      "requires_gates": [],
+      "route": "reviewer",
+      "write_paths": [
+        "tests/browser/release/",
+        "docs/orchestration/runs/<run>/quality/"
+      ],
+      "deliverables": [
+        "cross-browser/device matrix",
+        "soak/fault recovery evidence"
+      ],
+      "acceptance": [
+        "Chrome/Firefox on macOS+Windows, Safari macOS, Edge Windows pass",
+        "30-minute SP and two-hour four-player soak pass",
+        "Storage-full/corrupt/interrupt, context loss, focus/audio recovery pass",
+        "Frame and memory evidence meets spec without hidden exclusions"
+      ],
+      "requirements": [
+        "R01",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07"
+      ],
+      "constraints": [],
+      "token_limit": null,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D09",
+        "D14",
+        "D15"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T31",
+      "title": "Prepare reproducible asset-free release candidate",
+      "phase": "quality",
+      "kind": "packet",
+      "status": "partial",
+      "depends_on": [
+        "T01",
+        "T17",
+        "T26"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "scripts/release/",
+        "docs/release/",
+        "services/signaling/deploy/"
+      ],
+      "deliverables": [
+        "source/dependency permission and notices manifest",
+        "clean build and bundle scan",
+        "local deployment/recovery runbook"
+      ],
+      "acceptance": [
+        "Distribution permissions resolved for actual included dependency closure",
+        "Bundle contains no original/converted assets, EXE, dumps or secrets",
+        "Clean build from documented permitted inputs succeeds",
+        "TURN and room configuration documented; no public deployment assumed"
+      ],
+      "requirements": [
+        "R01",
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D01",
+        "D02",
+        "D06",
+        "D08",
+        "D11",
+        "D16"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": "Asset-free clean export published privately as M1sterMo/gta2-browser (scripts/publish_export.py)."
+    },
+    {
+      "id": "T32",
+      "title": "Accept release candidate and hand off",
+      "phase": "quality",
+      "kind": "packet",
+      "status": "planned",
+      "depends_on": [
+        "T30",
+        "T31"
+      ],
+      "requires_gates": [
+        "G3",
+        "G5"
+      ],
+      "route": "reviewer",
+      "write_paths": [
+        "docs/release/acceptance.md",
+        "docs/orchestration/runs/<run>/final/"
+      ],
+      "deliverables": [
+        "R01–R08 evidence index",
+        "known limits and recovery guide",
+        "final usage/forecast reconciliation"
+      ],
+      "acceptance": [
+        "All required gates/requirements pass with no untested release rows",
+        "Independent reviewer signs technical acceptance",
+        "Distribution readiness separated from publication",
+        "User gets runnable instructions and exact tested compatibility profile"
+      ],
+      "requirements": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "constraints": [],
+      "token_limit": 250000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D15",
+        "D16"
+      ],
+      "research_policy": "Implement locked decisions; source inspection and prescribed validation only. Escalate one contradictory fact, not broad research.",
+      "status_note": ""
+    },
+    {
+      "id": "T33",
+      "title": "Map screen (M), minimap, waypoints and discovery (user request, 13 October 2026)",
+      "phase": "single_player",
+      "kind": "packet",
+      "status": "done",
+      "depends_on": [
+        "T08"
+      ],
+      "requires_gates": [],
+      "route": "worker",
+      "write_paths": [
+        "web/",
+        "port/render/",
+        "port/platform/",
+        "docs/browser-build-status.md"
+      ],
+      "deliverables": [
+        "Full district map rendered in the browser from the player's own GMP+STY files (native 64 px per block), never shipped",
+        "Points of interest read from the game's own data: mission script (.scr) objects such as kill frenzies, weapon/power-up pickups, phones, garages/spray shops, churches (save points), plus GMP named zones",
+        "M opens a full-screen map centred on the player (game paused), zoom and pan with mouse/keys, click to set or clear a waypoint",
+        "Corner minimap (toggle) with player heading and a waypoint arrow at the edge when off-screen; waypoint arrow also on the main view",
+        "Discovery mode (default on): map areas appear once seen on screen; points of interest appear once seen or used; 'show everything' option",
+        "Discovery state saved per save slot next to the game save (IndexedDB), included in Export/Import saves"
+      ],
+      "acceptance": [
+        "Presentation only: reads game state and the player's files, never writes game state; off/unused leaves the original game unchanged",
+        "No third-party map images or marker data (e.g. map websites); everything derived from the player's own game files",
+        "Recorded as a non-original feature in decisions.md; M is unbound in the original controls",
+        "Map open/close under 100 ms after first build of the map image; no frame-time cost with map closed and minimap off",
+        "Discovery survives save, reload and export/import"
+      ],
+      "requirements": [],
+      "constraints": [
+        "Not in the original game: optional, off by default"
+      ],
+      "token_limit": 150000,
+      "review_route": "reviewer",
+      "decision_ids": [
+        "D07"
+      ],
+      "research_policy": "Map from GMP block/lid data (format docs); POIs from the .scr object/command lists the game already parses; no new external research.",
+      "status_note": "Map (M), waypoints, discovery, live markers, gang jobs with logos, GTA-style radar with original arrow sprites."
+    }
+  ],
+  "decisions": "docs/orchestration/decisions.md",
+  "decision_config": "docs/orchestration/decision-config.json",
+  "decision_policy": {
+    "status": "locked",
+    "lower_cost_workers_do_research": false,
+    "allowed_worker_discovery": "Bounded source reading and prescribed measurement",
+    "reopen_requires": [
+      "decision ID",
+      "minimal failing reproduction",
+      "required outcome affected",
+      "orchestrator resolution"
+    ]
+  },
+  "status_updated": "2026-10-13"
+}
