@@ -9,7 +9,9 @@ transport (WebRTC through public trackers); saved crews need the game server.
 
 Usage: scripts/build_pages.py   (run scripts/build_port.py --preset release first)
 """
+import hashlib
 import json
+import re
 import pathlib
 import shutil
 import sys
@@ -51,6 +53,35 @@ with Rockstar Games or Take-Two Interactive.
 """
 
 
+def version_urls():
+    """Gives this build's scripts and WebAssembly their own addresses (?v=<content hash>).
+
+    GitHub Pages lets browsers reuse a file for 10 minutes, so a returning player could get the
+    new gta2.wasm with an old gta2.js and fail to start (LinkError). With every reference
+    versioned, a page only ever loads files of one build. index.html stays unversioned (an old
+    copy loads shell.js, whose references then all point at the new build).
+    """
+    names = sorted(p.name for p in SITE.iterdir() if p.is_file() and p.suffix in ('.js', '.wasm', '.html'))
+    digest = hashlib.sha256()
+    for name in names:
+        digest.update(name.encode() + b'\0' + (SITE / name).read_bytes())
+    v = digest.hexdigest()[:10]
+    imports = re.compile(r"""((?:from|import)\s*\(?\s*)(['"])(\./[^'"?]+\.(?:js|mjs))\2""")
+    worker = re.compile(r"""(new URL\(\s*)(['"])(\./[^'"?]+\.js)\2(\s*,\s*import\.meta\.url)""")
+    wasm = re.compile(r"""(['"])((?:gta2|unshield)\.wasm)\1""")
+    for p in SITE.glob('*.js'):
+        text = p.read_text(encoding='utf-8')
+        text = imports.sub(lambda m: f'{m[1]}{m[2]}{m[3]}?v={v}{m[2]}', text)
+        text = worker.sub(lambda m: f'{m[1]}{m[2]}{m[3]}?v={v}{m[2]}{m[4]}', text)
+        text = wasm.sub(lambda m: f'{m[1]}{m[2]}?v={v}{m[1]}', text)
+        p.write_text(text, encoding='utf-8')
+    index = SITE / 'index.html'
+    html = index.read_text(encoding='utf-8')
+    assert html.count('src="shell.js"') == 1
+    index.write_text(html.replace('src="shell.js"', f'src="shell.js?v={v}"'), encoding='utf-8')
+    return v
+
+
 def main():
     if not (RELEASE / 'gta2.wasm').exists():
         print('build_pages: build the release first (scripts/build_port.py --preset release)', file=sys.stderr)
@@ -66,6 +97,7 @@ def main():
             shutil.copy2(f, SITE / f.name)
     for d in DIRS:
         shutil.copytree(RELEASE / d, SITE / d)
+    version_urls()
     (SITE / 'config.json').write_text(json.dumps({'static': True}) + '\n')
     (SITE / '.nojekyll').write_text('')
     (SITE / 'README.md').write_text(README)
