@@ -68,6 +68,37 @@ function saveJson(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
+/** The map's discovery in this browser, per district (map id), for Export saves. */
+export function exportDiscovery() {
+  const out = {};
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(SEEN_KEY)) out[k.slice(SEEN_KEY.length)] = localStorage.getItem(k);
+  } catch { /* storage unavailable */ }
+  return out;
+}
+
+/** Adds imported discovery to what this browser has seen (never removes any). Returns the districts. */
+export function importDiscovery(map) {
+  let districts = 0;
+  for (const [id, b64] of Object.entries(map && typeof map === 'object' ? map : {})) {
+    if (!/^\d+$/.test(id) || typeof b64 !== 'string') continue;
+    try {
+      const bits = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      if (bits.length !== 8192) continue;
+      const have = localStorage.getItem(SEEN_KEY + id);
+      if (have) {
+        const old = Uint8Array.from(atob(have), (c) => c.charCodeAt(0));
+        for (let i = 0; i < 8192 && i < old.length; i++) bits[i] |= old[i];
+      }
+      let bin = '';
+      for (const b of bits) bin += String.fromCharCode(b);
+      localStorage.setItem(SEEN_KEY + id, btoa(bin));
+      districts++;
+    } catch { /* corrupt entry or storage full: skip it */ }
+  }
+  return districts;
+}
+
 export class Gta2Map {
   /**
    * @param {object} opts

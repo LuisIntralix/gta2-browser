@@ -118,9 +118,12 @@ export class SaveStorage {
     this.pending.clear();
   }
 
-  /** All stored files as one JSON blob, for backup or moving to another browser. */
-  async exportAll() {
-    const out = { format: 'gta2-port-saves', version: 1, files: {} };
+  /**
+   * All stored files as one JSON blob, for backup or moving to another browser. extra: more
+   * sections from the shell (version 2: the Saves screen's saves and the map's discovery).
+   */
+  async exportAll(extra = {}) {
+    const out = { format: 'gta2-port-saves', version: 2, files: {}, ...extra };
     if (!this.db) return new Blob([JSON.stringify(out)], { type: 'application/json' });
     const tx = this.db.transaction(STORE, 'readonly');
     const store = tx.objectStore(STORE);
@@ -134,10 +137,9 @@ export class SaveStorage {
     return new Blob([JSON.stringify(out)], { type: 'application/json' });
   }
 
-  /** Restores files from an exported blob (takes effect on the next start). */
-  async importAll(text) {
-    const parsed = JSON.parse(text);
-    if (parsed.format !== 'gta2-port-saves' || parsed.version !== 1) {
+  /** Restores files from an export, parsed (takes effect on the next start). */
+  async importAll(parsed) {
+    if (!parsed || parsed.format !== 'gta2-port-saves' || ![1, 2].includes(parsed.version)) {
       throw new Error('This is not a GTA2 browser save export.');
     }
     const tx = this.db.transaction(STORE, 'readwrite');

@@ -3,13 +3,13 @@
 // No game file leaves the device (R01); nothing is fetched from the network
 // except the port itself, or local files in ?devdata=1 developer mode.
 import createGta2 from './gta2.js';
-import { SAVE_KEY, SaveStates, listSaves, toast } from './savestate.js';
+import { SAVE_KEY, SaveStates, exportSaves, importSaves, listSaves, toast } from './savestate.js';
 import { SavesScreen, describe } from './saves.js';
 import { Gta2Renderer } from './renderer.js';
 import { SaveStorage } from './storage.js';
 import { Gta2Audio } from './audio.js';
 import { GameFileCache, downloadFreeware, unpackInstallerFile } from './gamefiles.js';
-import { Gta2Map } from './map.js';
+import { Gta2Map, exportDiscovery, importDiscovery } from './map.js';
 import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js';
 import { CoopChat } from './chat.js';
 import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js';
@@ -492,7 +492,9 @@ function wireSaveButtons(storage) {
   $('tools').hidden = false;
   $('export-saves').addEventListener('click', async () => {
     storage.flush();
-    const blob = await storage.exportAll();
+    if (window.gta2 && window.gta2.map) window.gta2.map.saveSeen(); // the latest discovery
+    // the game's own saves, the Saves screen's saves and the map's discovery, in one file
+    const blob = await storage.exportAll({ states: await exportSaves(), map: exportDiscovery() });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `gta2-saves-${new Date().toISOString().slice(0, 10)}.json`;
@@ -503,8 +505,12 @@ function wireSaveButtons(storage) {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const n = await storage.importAll(await file.text());
-      setStatus(`Imported ${n} save file(s). Reload the page to use them.`);
+      const parsed = JSON.parse(await file.text());
+      const n = await storage.importAll(parsed);
+      const states = await importSaves(parsed.states);
+      const districts = importDiscovery(parsed.map);
+      setStatus(`Imported ${n} game save file(s), ${states} Saves-screen save(s) and map progress for ` +
+        `${districts} district(s). Reload the page to use them.`);
     } catch (err) {
       setStatus(err.message, true);
     }
