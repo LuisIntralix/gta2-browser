@@ -22,6 +22,44 @@
     #screen { flex: 1; width: 100%; height: 100%; display: block; outline: none; image-rendering: pixelated; }
     #status { position: fixed; left: 1rem; bottom: 2.2rem; margin: 0; color: var(--muted); }
     #status.error { color: #ff8a8a; }
+    #state-toast { position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%); z-index: 30; pointer-events: none;
+      padding: .5rem 1rem; border-radius: 6px; background: rgba(0, 0, 0, .78); color: #fff; font-weight: 600; }
+    #state-toast.error { color: #ff8a8a; }
+    .continue { display: flex; gap: .8rem; align-items: center; margin-top: 1rem; padding: .6rem; border-radius: 8px;
+      background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); text-align: left; cursor: pointer;
+      color: inherit; font: inherit; width: 100%; }
+    .continue:hover { border-color: #f5c518; }
+    .continue img { width: 120px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 5px; flex: none; }
+    .continue span { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+    .continue b { color: #f5c518; }
+    .continue small { color: #9aa0aa; }
+    #saves-screen { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+      padding: 16px; background: rgba(0, 0, 0, .72); }
+    #saves-screen[hidden] { display: none; }
+    .saves-panel { width: min(980px, 100%); max-height: 100%; overflow: auto; padding: 1.2rem 1.4rem; border-radius: 10px;
+      background: #15171c; border: 1px solid #2a2e37; color: #e8e8e8; }
+    .saves-head { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem; }
+    .saves-head h2 { margin: 0; font-size: 1.4rem; color: #f5c518; }
+    .saves-keys { color: #8b919c; font-size: .85rem; flex: 1; }
+    .saves-close { background: none; border: 0; color: #c9c9c9; font-size: 1.2rem; cursor: pointer; }
+    .saves-note { color: #8b919c; font-size: .85rem; margin: .6rem 0; }
+    .saves-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .8rem; }
+    .save-card { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; background: #1d2027;
+      border: 1px solid #2a2e37; }
+    .save-card img, .save-blank { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0c0d10; }
+    .save-blank { display: flex; align-items: center; justify-content: center; color: #5d636e; font-size: .9rem; }
+    .save-text { display: flex; flex-direction: column; gap: .15rem; padding: .55rem .7rem 0; min-height: 3.6rem; }
+    .save-slot { color: #f5c518; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+    .save-text strong { font-size: .95rem; }
+    .save-text small { color: #9aa0aa; }
+    .save-actions { display: flex; gap: .4rem; padding: .6rem .7rem .7rem; margin-top: auto; }
+    .save-actions button { flex: 1; padding: .4rem .5rem; white-space: nowrap; border-radius: 5px; border: 1px solid #3a3f4b; background: #262a33;
+      color: #e8e8e8; cursor: pointer; font: inherit; font-size: .85rem; }
+    .save-actions button.primary { background: #f5c518; border-color: #f5c518; color: #111; font-weight: 600; }
+    .save-actions button.quiet { flex: 0 0 auto; color: #9aa0aa; }
+    .save-actions button.armed { background: #b3261e; border-color: #b3261e; color: #fff; }
+    .save-actions:has(.armed) button:not(.armed) { display: none; } /* the question gets the whole row */
+    .save-actions button:disabled { opacity: .45; cursor: default; }
     #coop-banner { position: fixed; left: 50%; top: 4.5rem; transform: translateX(-50%); z-index: 4; margin: 0;
       padding: .5rem 1rem; border-radius: 6px; background: rgba(8,9,12,.85); color: #ffd23f; font-weight: 600;
       max-width: min(90vw, 40rem); text-align: center; pointer-events: none; }
@@ -55,6 +93,7 @@
       border: 0; cursor: pointer; text-transform: uppercase; color: #121212; background: #f5c518; box-shadow: 0 3px 0 #a5830b;
       white-space: nowrap; }
     .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: .6; cursor: progress; filter: none; transform: none; }
     .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #a5830b; }
     .btn.alt { background: #2fbf71; box-shadow: 0 3px 0 #1d7a48; color: #08130c; }
     .btn.ghost { background: #2a2a31; box-shadow: 0 3px 0 #17171b; color: #eee; }
@@ -217,6 +256,7 @@
           <progress id="files-bar" max="1" value="0"></progress>
           <span id="files-state">Getting GTA2 ready…</span>
           <div><button class="btn" type="button" data-play>Play now</button></div>
+          <div id="continue-root" hidden></div>
         </div>
       </section>
 
@@ -390,6 +430,7 @@
       <button id="fps-toggle" type="button" aria-pressed="false">FPS</button>
       <button id="fullscreen" type="button">Full screen</button>
       <button id="mute" type="button">Mute</button>
+      <button id="saves-open" type="button">Saves</button>
       <button id="export-saves" type="button">Export saves</button>
       <label>Import saves<input id="import-saves" type="file" accept="application/json,.json"></label>
     </div>

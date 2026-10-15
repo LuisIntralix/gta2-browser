@@ -140,6 +140,12 @@ export class Gta2Renderer {
     this.stats.textures = this.textures.size;
   }
 
+  /** Quick load: the game uploads every texture it holds again. */
+  freeAllTextures() {
+    for (const tex of this.textures.values()) this.gl.deleteTexture(tex);
+    this.textures.clear();
+  }
+
   freeTexture(id) {
     const tex = this.textures.get(id);
     if (tex) {

@@ -2,6 +2,8 @@
 // friends, the controls on a drawn keyboard, options and help. Layout in the
 // spirit of browser-game launchers such as Eaglercraft's; our own code and style.
 
+import { LOAD_KEY, SAVE_KEY } from './savestate.js';
+
 // What each key does, by group (colour). Matches PORT_CONTROLS in shell.js
 // and the shell's own keys (map, scoreboard, view distance).
 const GROUPS = {
@@ -21,11 +23,14 @@ export const CONTROLS = [
   { keys: ['Space'], does: 'Jump / handbrake', group: 'car' },
   { keys: ['J', 'K'], does: 'Previous / next weapon', group: 'weapon' },
   { keys: ['I', 'O'], does: 'Special (horn, car extras)', group: 'weapon' },
-  { keys: ['M'], does: 'Map and waypoints', group: 'info' },
+  { keys: ['R'], does: 'Radio on / off', group: 'car' },
+  { keys: ['T'], does: 'Next radio station (in co-op T is chat)', group: 'car' },
+  { keys: ['M'], does: 'Map, waypoints and your current job', group: 'info' },
   { keys: ['Tab'], does: 'Scoreboard (co-op)', group: 'info' },
   { keys: ['P'], does: 'Status', group: 'info' },
   { keys: ['-', '='], does: 'View distance', group: 'info' },
   { keys: ['Esc'], does: 'Game menu', group: 'menu' },
+  { keys: [SAVE_KEY, LOAD_KEY], does: 'Saves: save (20% of your cash, at least $10,000) or load (single player)', group: 'menu' },
 ];
 
 const ROWS = [
@@ -151,7 +156,7 @@ export function showLanding({ onPlay, onCoop, files }) {
       state.textContent = files.fromCache ? 'Ready: GTA2 is saved in this browser.' : 'Ready: downloaded, and kept for next time.';
       bar.value = 1;
       bar.hidden = true;
-    }, (err) => { state.textContent = `Could not get the game files: ${err.message}.`; state.style.color = '#ff8a8a'; });
+    }, () => { /* serverGameFiles() shows the error, with a retry */ });
   } else {
     // a static site, GTA2 not yet in this browser: Play gets it (once) from the Internet Archive
     state.textContent = 'Play downloads GTA2 once from the Internet Archive (free, 346 MB) and keeps it in this browser.';
@@ -159,13 +164,30 @@ export function showLanding({ onPlay, onCoop, files }) {
   }
 }
 
+/**
+ * Continue: the newest save in this browser, as a card under Play.
+ * @param {{where: string, how: string, thumb: Blob|null}} save
+ * @param {() => void} onContinue
+ */
+export function showContinue(save, onContinue) {
+  const root = document.getElementById('continue-root');
+  if (!root) return;
+  const button = el('button', { type: 'button', class: 'continue' });
+  if (save.thumb) button.append(el('img', { src: URL.createObjectURL(save.thumb), alt: '' }));
+  button.append(el('span', {}, el('b', {}, 'Continue'), el('strong', {}, save.where), el('small', {}, save.how)));
+  button.addEventListener('click', () => { button.disabled = true; onContinue(); });
+  root.replaceChildren(button);
+  root.hidden = false;
+}
+
 /** Download progress for the landing page's status card. */
-export function landingProgress(text, fraction) {
+export function landingProgress(text, fraction, isError = false) {
   const state = document.getElementById('files-state');
   const bar = document.getElementById('files-bar');
   if (!state) return;
   state.textContent = text;
-  bar.hidden = false;
+  state.style.color = isError ? '#ff8a8a' : '';
+  bar.hidden = isError;
   bar.value = fraction;
 }
 

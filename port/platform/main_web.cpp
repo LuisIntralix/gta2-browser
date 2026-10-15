@@ -15,6 +15,8 @@ int __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
 extern "C" int Gta2Port_RunLoopSlice();
 extern "C" void Gta2Port_StaticInit();
 
+void Gta2Port_TrackJobBriefs(); // jobs_web.cpp
+
 namespace
 {
 constexpr int kRunning = 0x7FFFFFFF;
@@ -39,6 +41,7 @@ void Frame()
     }
     const double t0 = emscripten_get_now();
     const int r = Gta2Port_RunLoopSlice();
+    Gta2Port_TrackJobBriefs(); // the current job's instructions, for the map screen
     gFrameMs += emscripten_get_now() - t0;
     ++gFrameCount;
     if (r != -1)

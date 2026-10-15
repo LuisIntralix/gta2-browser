@@ -8,6 +8,7 @@ const PX = 16;            // map image pixels per block (256 blocks -> 4096 px)
 const ROWS_PER_CHUNK = 8; // block rows rendered per step while building the image
 const MINIMAP_KEY = 'gta2-port-minimap';
 const ENEMY_RANGE = 24; // blocks: how close an enemy player must be to show on the map and radar
+const WAYPOINT_REACHED = 2; // blocks: this close, the waypoint is reached and goes
 const FX = 16384;         // Fix16: 1.0 block
 const SEEN_KEY = 'gta2-port-seen-';   // + map id: blocks seen on screen (discovery)
 const REVEAL_KEY = 'gta2-port-map-reveal';
@@ -29,6 +30,9 @@ export const POI_KINDS = {
 };
 // Gang job phones, by HUD arrow colour (Hud_Arrow_7C::DrawArrow_5D0C90; checked
 // against the phone objects at the same places).
+// Who speaks a brief (its face, GetBriefFaceIdx_5D3680): shown before the text on the job panel.
+const SPEAKERS = { 1: 'Loonies', 2: 'Yakuza', 3: 'Zaibatsu', 4: 'Rednecks', 5: 'Scientists', 6: 'Krishnas', 7: 'Russians', 9: 'Police' };
+
 const JOBS = {
   3: { label: 'Easy job', colour: '#3ddc84', dot: 9 },     // green phone
   1: { label: 'Medium job', colour: '#ffd23f', dot: 8 },   // yellow phone
@@ -148,6 +152,7 @@ export class Gta2Map {
   get waypoint() { return this.wp; }
   set waypoint(w) {
     this.wp = w || null;
+    this.wpArmed = false; // reached only after being farther away (not when set where you stand)
     if (this.coop) this.coop.shareWaypoint(this.wp); // co-op: the other players see it in your colour
   }
 
@@ -194,24 +199,43 @@ export class Gta2Map {
     }
   }
 
+  /** Quick load: the game's memory was replaced, so the district is drawn again (same district: the waypoint stays). */
+  invalidate() {
+    this.epoch = -1;
+    this.keepWaypoint = true;
+  }
+
   /** Per animation frame: notice district changes, draw the minimap and the waypoint arrow. */
   frame() {
     const s = this.state();
     if (s && s.epoch !== this.epoch) {
       this.saveSeen();
       this.epoch = s.epoch;
+      const sameDistrict = s.mapId === this.mapId;
       this.mapId = s.mapId;
       this.image = null;
       if (this.imageBitmap) { this.imageBitmap.close(); this.imageBitmap = null; }
-      this.wp = null;
+      if (!(this.keepWaypoint && sameDistrict)) this.wp = null;
+      this.keepWaypoint = false;
       this.sprites.clear();
       this.loadSeen();
       this.build(s.epoch);
     }
     this.last = s;
-    if (s && s.hasPlayer && !this.open) this.markSeen(s);
+    if (s && s.hasPlayer && !this.open) {
+      this.markSeen(s);
+      this.checkArrival(s);
+    }
     if (this.open) { this.drawScreen(); return; }
     this.drawOverlay(s);
+  }
+
+  /** The waypoint goes once the player gets to it. */
+  checkArrival(s) {
+    if (!this.wp) return;
+    const near = Math.hypot(this.wp.x - s.x, this.wp.y - s.y) <= WAYPOINT_REACHED;
+    if (!near) this.wpArmed = true;
+    else if (this.wpArmed) this.waypoint = null;
   }
 
   // ---- discovery and points of interest ---------------------------------
@@ -228,8 +252,13 @@ export class Gta2Map {
     this.fogDirty = true;
   }
 
-  saveSeen() {
+  /**
+   * Stores the blocks seen. Adds to what is stored rather than replacing it: another tab (or an
+   * older version of the game in one) may have stored more since this one loaded. replace: a reset.
+   */
+  saveSeen(replace = false) {
     if (!this.seenDirty || !this.mapId) return;
+    if (!replace) this.mergeStoredSeen();
     const bits = new Uint8Array(8192);
     for (let i = 0; i < 65536; i++) if (this.seen[i]) bits[i >> 3] |= 1 << (i & 7);
     let bin = '';
@@ -241,7 +270,19 @@ export class Gta2Map {
     this.seen.fill(0);
     this.seenDirty = true;
     this.fogDirty = true;
-    this.saveSeen();
+    this.saveSeen(true);
+  }
+
+  /** Adds the blocks another tab has stored for this district. */
+  mergeStoredSeen() {
+    try {
+      const b64 = localStorage.getItem(SEEN_KEY + this.mapId);
+      if (!b64) return;
+      const bits = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      for (let i = 0; i < 65536; i++) {
+        if (!this.seen[i] && (bits[i >> 3] >> (i & 7)) & 1) { this.seen[i] = 1; this.fogDirty = true; }
+      }
+    } catch { /* storage unavailable or corrupt */ }
   }
 
   /** Marks the blocks currently on screen (at the player's height) as seen. */
@@ -613,6 +654,7 @@ export class Gta2Map {
     if (s && s.hasPlayer) this.drawPlayer(ctx, ...toScreen(s.x, s.y), s.heading, 1.4);
     this.drawLegend(ctx, pois);
     if (this.coop) this.drawScoreboard(ctx, w - 12, 12, 'right');
+    else this.drawJobBriefs(ctx, w, h);
     const hp = this.hover && this.poiNear(this.hover.x, this.hover.y);
     if (hp) {
       const [hx, hy] = toScreen(hp.x, hp.y);
@@ -694,6 +736,78 @@ export class Gta2Map {
         }
       }
     }
+    ctx.restore();
+  }
+
+  /**
+   * The current job's instructions: the briefs shown on screen during it (port/platform/jobs_web.cpp),
+   * newest first. Outside a job, the latest messages.
+   */
+  jobBriefs() {
+    const M = this.Module;
+    const p = M.ccall('gta2_port_job_briefs', 'number', [], []);
+    const head = M.HEAP32.subarray(p >> 2, (p >> 2) + 10); // [on a job, count, face x 8]
+    const briefs = [];
+    for (let i = 0; i < head[1]; i++) {
+      let text = '';
+      // after the faces and 8 shownAt doubles: 8 texts of 320 UTF-16 units
+      for (let o = (p + 104) / 2 + i * 320, n = 0; n < 320 && M.HEAPU16[o + n]; n++) text += String.fromCharCode(M.HEAPU16[o + n]);
+      briefs.push({ face: head[2 + i], text: text.replace(/#/g, '').replace(/\s+/g, ' ').trim() }); // #...# marks highlighted words
+    }
+    return { onJob: !!head[0], briefs: briefs.filter((b) => b.text).reverse() };
+  }
+
+  drawJobBriefs(ctx, w, h) {
+    const { onJob, briefs } = this.jobBriefs();
+    if (!briefs.length) return;
+    ctx.save();
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    const width = Math.min(380, Math.max(220, w * 0.3)), pad = 10, lh = 17;
+    const x = w - 12 - width;
+    const wrap = (text) => {
+      const lines = [];
+      let line = '';
+      for (const word of text.split(' ')) {
+        const next = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(next).width > width - 2 * pad) { lines.push(line); line = word; } else line = next;
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+    // as many briefs as fit above the help line, newest first
+    const rows = [];
+    let height = pad + 22;
+    for (const b of briefs) {
+      const who = SPEAKERS[b.face];
+      const lines = wrap(who ? `${who}: ${b.text}` : b.text);
+      if (rows.length && height + lines.length * lh + 8 > h - 60) break;
+      rows.push({ who, lines });
+      height += lines.length * lh + 8;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.72)';
+    ctx.fillRect(x, 12, width, height);
+    ctx.fillStyle = onJob ? '#ffd23f' : '#9a978f';
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.fillText(onJob ? 'Current job' : 'Latest messages', x + pad, 12 + pad);
+    let y = 12 + pad + 22;
+    rows.forEach((r, i) => {
+      r.lines.forEach((line, n) => {
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = i === 0 ? '#ffffff' : '#9a978f'; // the newest stands out
+        if (n === 0 && r.who) {
+          ctx.fillStyle = i === 0 ? '#ffd23f' : '#8b857a';
+          ctx.fillText(`${r.who}:`, x + pad, y);
+          const lead = ctx.measureText(`${r.who}: `).width;
+          ctx.fillStyle = i === 0 ? '#ffffff' : '#9a978f';
+          ctx.fillText(line.slice(r.who.length + 2), x + pad + lead, y);
+        } else {
+          ctx.fillText(line, x + pad, y);
+        }
+        y += lh;
+      });
+      y += 8;
+    });
     ctx.restore();
   }
 

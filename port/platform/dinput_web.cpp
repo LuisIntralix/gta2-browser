@@ -50,7 +50,7 @@ uint32_t gInputStats[4];
 
 void Push(std::deque<DIDEVICEOBJECTDATA>& q, DWORD ofs, DWORD data)
 {
-    DIDEVICEOBJECTDATA e = {ofs, data, static_cast<DWORD>(emscripten_get_now()), ++gSequence};
+    DIDEVICEOBJECTDATA e = {ofs, data, static_cast<DWORD>(gta2_port_now_ms()), ++gSequence};
     q.push_back(e);
     while (q.size() > 256)
     {

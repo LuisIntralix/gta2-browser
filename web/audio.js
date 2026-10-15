@@ -118,6 +118,7 @@ export class Gta2Audio {
     this.gameVolume = 1;
     this.userVolume = 1;
     this.muted = false;
+    this.radioOn = true; // R: the car radio's stations on or off (speech and effects keep playing)
     this.module = null;
     this.samples = new Map();
     this.bufferCache = new Map();
@@ -228,6 +229,13 @@ export class Gta2Audio {
     } catch { /* already stopped */ }
   }
 
+  /** Quick load: stops every effect and closes every stream (the game reopens the saved ones). */
+  reset() {
+    for (const id of [...this.samples.keys()]) this.sampleStop(id);
+    for (const id of [...this.streams.keys()]) this.streamClose(id);
+    this.bufferCache.clear();
+  }
+
   // ------------------------------------------------------------- streams
   streamOpen(id, path) {
     let bytes;
@@ -245,9 +253,11 @@ export class Gta2Audio {
     const gain = this.ctx.createGain();
     gain.connect(this.master);
     this.streams.set(id, {
-      path, bytes, wav, gain, loops: 1, rateFactor: 1, sources: [], started: false,
+      path, bytes, wav, gain, loops: 1, rateFactor: 1, sources: [], started: false, volume: 127,
+      radio: /(^|[\\/])gtaudio[\\/]\d+a?\.wav$/i.test(path), // a radio station (data/audio/vocals is speech)
       baseMs: 0, startWall: 0, cursorFrame: 0, nextTime: 0, durationMs: (wav.frames / wav.rate) * 1000,
     });
+    this.applyStreamGain(this.streams.get(id)); // a station opened while the radio is off starts silent
     return 1;
   }
 
@@ -303,7 +313,8 @@ export class Gta2Audio {
   streamSet(id, volume, rate) {
     const st = this.streams.get(id);
     if (!st) return;
-    st.gain.gain.value = Math.max(0, Math.min(127, volume)) / 127;
+    st.volume = volume;
+    this.applyStreamGain(st);
     const factor = Math.max(0.05, rate / st.wav.rate);
     if (factor !== st.rateFactor) {
       if (st.started) {
@@ -313,6 +324,16 @@ export class Gta2Audio {
       st.rateFactor = factor;
       for (const s of st.sources) s.playbackRate.value = factor;
     }
+  }
+
+  applyStreamGain(st) {
+    st.gain.gain.value = st.radio && !this.radioOn ? 0 : Math.max(0, Math.min(127, st.volume)) / 127;
+  }
+
+  /** Turns the car radio's stations on or off. */
+  setRadio(on) {
+    this.radioOn = on;
+    for (const st of this.streams.values()) this.applyStreamGain(st);
   }
 
   streamSeek(id, ms) {

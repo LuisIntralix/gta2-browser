@@ -478,6 +478,48 @@ game's time limit stops at 60 minutes.
   - downloads over a real internet connection;
   - more than two players.
 
+## Saves: quick save, slots with pictures, Continue (single player)
+
+**Keys and buttons:**
+- **Quick save:** ⌘S on a Mac, Ctrl+S elsewhere. F5 also works.
+- **Quick load:** ⌘O on a Mac, Ctrl+O elsewhere. F9 also works.
+- **Saves screen:** ⌘⇧S or Ctrl+Shift+S, or the toolbar's Saves button. It shows the quick save and six slots. Each card has a picture of the moment, the area and district ("Tedium, Industrial"), cash, wanted stars and when it was saved. Each card has Save, Load and Delete; overwriting or deleting asks once. The game is paused while the screen is open.
+- **Continue:** on the front page, a card under Play with the newest save's picture and place. One click starts the game and loads it.
+- **Toolbar:** Saves, Quick save and Quick load buttons.
+
+**Why these keys:** pages can take over Ctrl/⌘ S and O in Chrome, Firefox and Safari, so the browser's own Save and Open dialogs don't appear. F5 and F9 are kept for PC habits, but F5 is the browser's reload whenever the game doesn't have focus, and Mac keyboards need Fn for F-keys.
+
+**Scope:**
+- A save captures the whole game at that moment: missions, police, traffic, the car you're in, the radio position.
+- It works anywhere in a single-player game.
+- It's off in co-op, where every player simulates the same game.
+
+**How it works** (`web/savestate.js`, `port/platform/savestate_web.cpp`):
+- **What's saved.** The game's state is its WebAssembly memory. Between two frames the shell copies it up to the heap's end, about 30 MB in the first district. It gzips the copy (`CompressionStream`, about 11 MB, 1.5 s in the background while the game keeps running) and stores it in IndexedDB (`gta2-port-states`).
+- **Loading** writes the memory back in one step, zero-fills the rest, then rebuilds what lives in the browser:
+  - **Textures.** The browser's textures are dropped. Every texture the game holds (a registry in `gbh_web.cpp`) is uploaded again under fresh ids. Front-end images keep a copy of their pixels for this.
+  - **Sounds.** `web/audio.js` stops everything. The saved streams (radio, speech) reopen at their saved position: positions are copied into memory just before a save. Looping effects (engines, sirens) restart; one-shot effects end silently.
+  - **Clock.** All the game's clocks go through `gta2_port_now_ms`, which continues from the saved time, so nothing sees time jump or run backwards.
+  - **Also:** held keys are released, the frame timer is reset, and the map and radar are redrawn. The waypoint stays if it's the same district.
+- **Build check.** A snapshot only fits the build that made it, so each one records a hash of `gta2.wasm`. A save from another version is refused with a message. The Saves screen marks it "older version" and disables its Load button.
+- **Card details.** The picture is a 320-pixel JPEG of the game canvas (it keeps its last frame), taken before the Saves screen covers the game. The label comes from `gta2_port_savestate_label`: the area name the game shows on screen, the map file (giving the district), cash, lives, multiplier, wanted stars and health. It's read after the memory copy, because finding the area moves the map's zone cursor.
+- **Paused saves.** A save made behind the Saves screen holds the paused flag, so a load always unpauses.
+- **Shell rule.** Shell code must not hold a pointer into the game's heap across an `await` (the map waits for its build to finish before a save or load).
+
+**Tested** in the in-app Chromium, release build:
+- save, change things, load, in the same session;
+- save, reload the page, load from the front-end menu;
+- ⌘S and ⌘O pressed for real while driving with the radio on: no browser dialog, the radio resumed.
+- Saves screen: saved to a slot (picture, "Tedium, Industrial", $12,345), moved away, loaded it back. The game ran normally afterwards. A save from the previous build showed as "older version".
+- Continue on the local game server: saved, reloaded the front page, the card showed the save, and one click went straight back into it.
+
+Not tried yet: Firefox and Safari.
+
+**Next:**
+- autosave;
+- cloud saves on the game server;
+- the church saves (the game's own) stay as they are.
+
 ## Public site on GitHub Pages: no game files
 
 - **What it is.** The site is the release build with **no game files**, published to the
@@ -544,6 +586,8 @@ Developer options (append to the URL, local only):
 | Jump / handbrake | Space | Space |
 | Enter / exit vehicle | Enter | Enter |
 | Special 1 / special 2 / status | I / O / P | Tab / Left Alt / Right Shift |
+| Quick save / quick load (port) | ⌘S / ⌘O (Ctrl+S / Ctrl+O; also F5 / F9) | none |
+| Saves screen (port) | ⌘⇧S (Ctrl+Shift+S) | none |
 
 The shell seeds these into the game's `Control` registry key at start-up. The original
 defaults stay in `gDefaultControls_61A9E4`. Changes made in Options → Controls are saved

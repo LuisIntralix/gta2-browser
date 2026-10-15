@@ -147,14 +147,14 @@ void gta2_port_post_message(UINT msg, WPARAM wp, LPARAM lp)
     m.message = msg;
     m.wParam = wp;
     m.lParam = lp;
-    m.time = static_cast<DWORD>(emscripten_get_now());
+    m.time = static_cast<DWORD>(gta2_port_now_ms());
     gQueue.push_back(m);
 }
 
 // ------------------------------------------------------------------ time, process, misc
 DWORD timeGetTime(void)
 {
-    return static_cast<DWORD>(emscripten_get_now());
+    return static_cast<DWORD>(gta2_port_now_ms());
 }
 DWORD GetTickCount(void)
 {
@@ -166,7 +166,7 @@ void Sleep(DWORD)
 }
 BOOL QueryPerformanceCounter(LARGE_INTEGER* c)
 {
-    c->QuadPart = static_cast<LONGLONG>(emscripten_get_now() * 1000.0);
+    c->QuadPart = static_cast<LONGLONG>(gta2_port_now_ms() * 1000.0);
     return TRUE;
 }
 BOOL QueryPerformanceFrequency(LARGE_INTEGER* f)

@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "gbh_graphics.hpp"
@@ -26,6 +27,7 @@ EM_JS(void, gta2_js_upload_texture, (int id, int w, int h, const void* rgba), {
     Module.gta2Renderer && Module.gta2Renderer.uploadTexture(id, w, h, HEAPU8.subarray(rgba, rgba + w * h * 4));
 });
 EM_JS(void, gta2_js_free_texture, (int id), { Module.gta2Renderer && Module.gta2Renderer.freeTexture(id); });
+EM_JS(void, gta2_js_free_all_textures, (), { Module.gta2Renderer && Module.gta2Renderer.freeAllTextures(); });
 
 namespace
 {
@@ -69,6 +71,7 @@ struct ImageEntry
     BOOL loaded;
     DWORD w, h;
     STexture* tex;
+    u8* pixels; // a copy of the 16-bit image, to upload it again after a quick load
 };
 ImageEntry* gImages = nullptr;
 u32 gImageCount = 0;
@@ -86,6 +89,9 @@ constexpr int kPagePitch = 256;
 // palette) gets its own GPU texture, and STexture::field_1C_ptr is pointed at
 // the one matching its current content when it is registered or unlocked.
 std::unordered_map<uint64_t, intptr_t> gTextureByContent;
+
+// Every texture the game holds, so a quick load can rebuild the GPU side (savestate_web.cpp).
+std::unordered_set<STexture*> gLiveTextures;
 
 uint64_t ContentKey(const u8* pix, int w, int h, int palId)
 {
@@ -175,6 +181,7 @@ STexture* NewTexture(s32 w, s32 h, BYTE* data)
     t->field_E_width = static_cast<u16>(w);
     t->field_10_height = static_cast<u16>(h);
     t->field_14_original_pixel_data_ptr = data;
+    gLiveTextures.insert(t);
     return t;
 }
 
@@ -521,6 +528,7 @@ STexture* CC gbh_UnlockTexture(STexture* t)
 void CC gbh_FreeTexture(STexture* t)
 {
     // GPU textures are shared by content; they stay cached (see UploadPaletted).
+    gLiveTextures.erase(t);
     free(t);
 }
 
@@ -537,6 +545,7 @@ s32 CC gbh_FreeImageTable()
         if (gImages[i].loaded)
         {
             gbh_FreeTexture(gImages[i].tex);
+            free(gImages[i].pixels);
         }
     }
     free(gImages);
@@ -557,8 +566,15 @@ s32 CC gbh_LoadImage(SImage* img)
         {
             STexture* t = NewTexture(img->field_C_width, img->field_E_height, nullptr);
             t->field_1C_ptr = reinterpret_cast<void*>(static_cast<intptr_t>(gNextTextureId++));
-            UploadImage(t, reinterpret_cast<const u8*>(&img->field_12) + img->field_0);
-            gImages[i] = {TRUE, img->field_C_width, img->field_E_height, t};
+            const u8* src = reinterpret_cast<const u8*>(&img->field_12) + img->field_0;
+            UploadImage(t, src);
+            const size_t bytes = static_cast<size_t>(img->field_C_width) * img->field_E_height * 2;
+            u8* copy = static_cast<u8*>(malloc(bytes));
+            if (copy)
+            {
+                memcpy(copy, src, bytes);
+            }
+            gImages[i] = {TRUE, img->field_C_width, img->field_E_height, t, copy};
             return static_cast<s32>(i);
         }
     }
@@ -634,3 +650,26 @@ u32 CC gbh_ConvertColour(u8 r, u8 g, u8 b)
 }
 
 } // extern "C"
+
+// Quick load (savestate_web.cpp): the game's memory was replaced, so the browser's textures no
+// longer match the ids in it (after a page reload there are none). Every texture the game holds
+// is uploaded again, under fresh ids, and the browser forgets the rest.
+void Gta2Port_ReuploadTextures()
+{
+    gta2_js_free_all_textures();
+    gTextureByContent.clear();
+    for (STexture* t : gLiveTextures)
+    {
+        if (t->field_14_original_pixel_data_ptr)
+        {
+            UploadPaletted(t);
+        }
+    }
+    for (u32 i = 0; i < gImageCount; ++i)
+    {
+        if (gImages[i].loaded && gImages[i].pixels)
+        {
+            UploadImage(gImages[i].tex, gImages[i].pixels);
+        }
+    }
+}

@@ -382,17 +382,23 @@ const char* gta2_port_normalise_path(const char* path)
     return last.c_str();
 }
 
-// Monotonic milliseconds since page load.
+// Monotonic milliseconds: since page load, or continuing from a loaded quick save's clock
+// (gta2_port_set_clock), so the game never sees time jump or run backwards.
+static double gClockOffset = 0;
 double gta2_port_now_ms()
 {
-    return emscripten_get_now();
+    return emscripten_get_now() + gClockOffset;
+}
+void gta2_port_set_clock(double ms)
+{
+    gClockOffset = ms - emscripten_get_now();
 }
 
 // The game reads the x86 time-stamp counter for its profiler and CPU-speed
 // estimate. A 1 GHz counter derived from the monotonic clock serves both.
 unsigned long long gta2_port_rdtsc()
 {
-    return static_cast<unsigned long long>(emscripten_get_now() * 1.0e6);
+    return static_cast<unsigned long long>(gta2_port_now_ms() * 1.0e6);
 }
 
 } // extern "C"

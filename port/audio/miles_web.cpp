@@ -10,8 +10,12 @@
 #include "3rdParty/mss.h"
 #include <emscripten.h>
 #include <stdlib.h>
+#include <string.h>
+#include <algorithm>
+#include <vector>
 
 extern "C" const char* gta2_port_normalise_path(const char* path);
+extern "C" double gta2_port_now_ms();
 
 EM_JS(void, gta2_js_sample_start,
       (int id, const void* data, int len, int rate, int format, int loops, int loopStart, int loopEnd, int volume, int pan), {
@@ -32,6 +36,7 @@ EM_JS(void, gta2_js_stream_seek, (int id, int ms), { Module.gta2Audio && Module.
 EM_JS(int, gta2_js_stream_ms, (int id, int which), {
     return Module.gta2Audio ? Module.gta2Audio.streamMs(id, which) : 0;
 });
+EM_JS(void, gta2_js_audio_reset, (), { Module.gta2Audio && Module.gta2Audio.reset(); });
 EM_JS(void, gta2_js_master_volume, (int volume), { Module.gta2Audio && Module.gta2Audio.setMasterVolume(volume); });
 
 namespace
@@ -56,11 +61,24 @@ struct Stream
     S32 loops = 1;
     S32 rate = 22050;
     S32 volume = 127;
+    char path[192] = {}; // to reopen it after a quick load
+    bool started = false;
+    bool playing = false; // as of the last quick save
+    S32 positionMs = 0;
 };
+
+// Every sample and stream handle, so a quick load can rebuild what web/audio.js plays.
+std::vector<Sample*> gSamples;
+std::vector<Stream*> gStreams;
+
+template <typename T> void Forget(std::vector<T*>& list, T* p)
+{
+    list.erase(std::remove(list.begin(), list.end(), p), list.end());
+}
 
 double Now()
 {
-    return emscripten_get_now();
+    return gta2_port_now_ms(); // continues across a quick load
 }
 
 int Id(const void* p)
@@ -169,11 +187,13 @@ void AILCALL AIL_set_digital_master_volume(HDIGDRIVER, S32 volume)
 // 2D samples
 HSAMPLE AILCALL AIL_allocate_sample_handle(HDIGDRIVER)
 {
-    return reinterpret_cast<HSAMPLE>(new Sample());
+    gSamples.push_back(new Sample());
+    return reinterpret_cast<HSAMPLE>(gSamples.back());
 }
 void AILCALL AIL_release_sample_handle(HSAMPLE S)
 {
     Stop(AsSample(S));
+    Forget(gSamples, AsSample(S));
     delete AsSample(S);
 }
 void AILCALL AIL_init_sample(HSAMPLE S)
@@ -249,11 +269,13 @@ void AILCALL AIL_set_3D_provider_preference(HPROVIDER, C8 FAR*, void FAR*)
 }
 H3DSAMPLE AILCALL AIL_allocate_3D_sample_handle(HPROVIDER)
 {
-    return reinterpret_cast<H3DSAMPLE>(new Sample());
+    gSamples.push_back(new Sample());
+    return reinterpret_cast<H3DSAMPLE>(gSamples.back());
 }
 void AILCALL AIL_release_3D_sample_handle(H3DSAMPLE S)
 {
     Stop(reinterpret_cast<Sample*>(S));
+    Forget(gSamples, reinterpret_cast<Sample*>(S));
     delete reinterpret_cast<Sample*>(S);
 }
 S32 AILCALL AIL_set_3D_sample_info(H3DSAMPLE S, AILSOUNDINFO FAR* info)
@@ -312,15 +334,19 @@ HSTREAM AILCALL AIL_open_stream(HDIGDRIVER, char FAR* filename, S32)
         delete s;
         return nullptr; // missing or unreadable file: the game handles a null stream
     }
+    strncpy(s->path, gta2_port_normalise_path(filename), sizeof(s->path) - 1);
+    gStreams.push_back(s);
     return reinterpret_cast<HSTREAM>(s);
 }
 void AILCALL AIL_close_stream(HSTREAM s)
 {
     gta2_js_stream_close(Id(s));
+    Forget(gStreams, reinterpret_cast<Stream*>(s));
     delete reinterpret_cast<Stream*>(s);
 }
 void AILCALL AIL_start_stream(HSTREAM s)
 {
+    reinterpret_cast<Stream*>(s)->started = true;
     gta2_js_stream_start(Id(s), reinterpret_cast<Stream*>(s)->loops);
 }
 S32 AILCALL AIL_stream_status(HSTREAM s)
@@ -368,3 +394,42 @@ S32 AILCALL AIL_stream_volume(HSTREAM s)
 }
 
 } // extern "C"
+
+// Quick save (savestate_web.cpp): stream positions live in web/audio.js, so they are copied
+// into the game's memory before it is saved.
+void Gta2Port_AudioBeforeSave()
+{
+    for (Stream* s : gStreams)
+    {
+        s->playing = s->started && gta2_js_stream_playing(Id(s));
+        s->positionMs = gta2_js_stream_ms(Id(s), 1);
+    }
+}
+
+// Quick load: the game's memory now holds the saved sounds. web/audio.js drops what it was
+// playing and gets the saved streams back where they were and the looping effects (engines,
+// sirens). One-shot effects finish silently; the game still sees them for their real length.
+void Gta2Port_AudioAfterRestore()
+{
+    gta2_js_audio_reset();
+    for (Stream* s : gStreams)
+    {
+        if (!gta2_js_stream_open(Id(s), s->path))
+        {
+            continue;
+        }
+        gta2_js_stream_set(Id(s), s->volume, s->rate);
+        gta2_js_stream_seek(Id(s), s->positionMs);
+        if (s->playing)
+        {
+            gta2_js_stream_start(Id(s), s->loops);
+        }
+    }
+    for (Sample* s : gSamples)
+    {
+        if (s->loops == 0 && Playing(s))
+        {
+            Start(s);
+        }
+    }
+}

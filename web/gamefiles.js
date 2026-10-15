@@ -90,22 +90,38 @@ async function unpackInstaller(buf, onProgress) {
   }
 }
 
+// A download that receives nothing for this long is given up, so Play can try again.
+const STALL_MS = 45000;
+
 async function fetchInstaller(onProgress) {
-  const res = await fetch(INSTALLER_URL);
-  if (!res.ok || !res.body) throw new Error(`The download failed (HTTP ${res.status}).`);
-  const buf = new Uint8Array(INSTALLER_SIZE);
-  const reader = res.body.getReader();
-  let got = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (got + value.length > INSTALLER_SIZE) throw new Error('The download is larger than the GTA2 installer.');
-    buf.set(value, got);
-    got += value.length;
-    onProgress('download', got, INSTALLER_SIZE);
+  const abort = new AbortController();
+  let timer = 0;
+  const watch = () => { clearTimeout(timer); timer = setTimeout(() => abort.abort(), STALL_MS); };
+  watch();
+  try {
+    const res = await fetch(INSTALLER_URL, { signal: abort.signal });
+    if (!res.ok || !res.body) throw new Error(`The download failed (HTTP ${res.status})`);
+    const buf = new Uint8Array(INSTALLER_SIZE);
+    const reader = res.body.getReader();
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      watch();
+      if (got + value.length > INSTALLER_SIZE) throw new Error('The download is larger than the GTA2 installer');
+      buf.set(value, got);
+      got += value.length;
+      onProgress('download', got, INSTALLER_SIZE);
+    }
+    if (got !== INSTALLER_SIZE) throw new Error(`The download stopped early (${got} of ${INSTALLER_SIZE} bytes)`);
+    return buf;
+  } catch (err) {
+    if (abort.signal.aborted) throw new Error(`The Internet Archive sent nothing for ${STALL_MS / 1000} seconds`);
+    if (err instanceof TypeError) throw new Error(`The Internet Archive could not be reached (${err.message})`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  if (got !== INSTALLER_SIZE) throw new Error(`The download stopped early (${got} of ${INSTALLER_SIZE} bytes). Try again.`);
-  return buf;
 }
 
 export class GameFileCache {

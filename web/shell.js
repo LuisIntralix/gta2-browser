@@ -3,12 +3,14 @@
 // No game file leaves the device (R01); nothing is fetched from the network
 // except the port itself, or local files in ?devdata=1 developer mode.
 import createGta2 from './gta2.js';
+import { SAVE_KEY, SaveStates, listSaves, toast } from './savestate.js';
+import { SavesScreen, describe } from './saves.js';
 import { Gta2Renderer } from './renderer.js';
 import { SaveStorage } from './storage.js';
 import { Gta2Audio } from './audio.js';
 import { GameFileCache, downloadFreeware, unpackInstallerFile } from './gamefiles.js';
 import { Gta2Map } from './map.js';
-import { hideLanding, landingProgress, showLanding, showLeaderboard } from './landing.js';
+import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js';
 import { CoopChat } from './chat.js';
 import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js';
 
@@ -456,6 +458,36 @@ function wireAudioButton(audio) {
   apply();
 }
 
+const RADIO_KEY = 'gta2-port-radio';
+
+/**
+ * Radio keys: R turns the car radio on or off (kept in this browser); T is the game's own
+ * F1, the next station (single player; in co-op T opens the chat). Returns the key filter.
+ */
+function wireRadioKeys(Module, audio, coop) {
+  const key = Module.cwrap('gta2_port_key', null, ['number', 'number', 'number', 'number']);
+  let on = true;
+  try { on = localStorage.getItem(RADIO_KEY) !== '0'; } catch { /* storage unavailable */ }
+  audio.setRadio(on);
+  return (e, down) => {
+    const mod = e.metaKey || e.ctrlKey || e.altKey;
+    if (e.code === 'KeyR' && !mod) {
+      if (down && !e.repeat) {
+        on = !on;
+        audio.setRadio(on);
+        try { localStorage.setItem(RADIO_KEY, on ? '1' : '0'); } catch { /* storage unavailable */ }
+        toast(on ? 'Radio on' : 'Radio off (R to turn it back on)');
+      }
+      return true;
+    }
+    if (e.code === 'KeyT' && !mod && !coop) {
+      if (!e.repeat) key(KEYS.F1[0], KEYS.F1[1], down ? 1 : 0, 0); // the game changes station on F1
+      return true;
+    }
+    return false;
+  };
+}
+
 function wireSaveButtons(storage) {
   $('tools').hidden = false;
   $('export-saves').addEventListener('click', async () => {
@@ -707,7 +739,7 @@ function coopView(Module, { lobby, players, mySlot, mode = 'roam', crews = [] })
   return view;
 }
 
-async function start(getFiles, { cacheAfterStart = false, coop = null } = {}) {
+async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot = null } = {}) {
   const startOptions = { commandLine: coop ? '-N' : '' };
   $('picker').hidden = true;
   setStatus('Starting…');
@@ -792,16 +824,15 @@ async function start(getFiles, { cacheAfterStart = false, coop = null } = {}) {
     else if (cacheAfterStart) setTimeout(() => cachePickedFiles(files), 3000);
     // Map screen (M), minimap and waypoint: not in the original game (T33).
     const releaseAll = Module.cwrap('gta2_port_release_all_keys', null, []);
-    const map = new Gta2Map({
-      Module, renderer, gameCanvas: canvas,
-      onPause: (paused) => {
-        gamePaused = paused;
-        releaseAll();
-        // in co-op the shared game keeps running behind the map (everyone else would wait)
-        if (!coop) Module.ccall('gta2_port_set_paused', null, ['number'], [paused ? 1 : 0]);
-        if (audio.ctx) { if (paused) audio.ctx.suspend().catch(() => {}); else audio.resume(); }
-      },
-    });
+    // The map screen and the Saves screen pause the game and its sound.
+    const pauseGame = (paused) => {
+      gamePaused = paused;
+      releaseAll();
+      // in co-op the shared game keeps running behind the map (everyone else would wait)
+      if (!coop) Module.ccall('gta2_port_set_paused', null, ['number'], [paused ? 1 : 0]);
+      if (audio.ctx) { if (paused) audio.ctx.suspend().catch(() => {}); else audio.resume(); }
+    };
+    const map = new Gta2Map({ Module, renderer, gameCanvas: canvas, onPause: pauseGame });
     window.gta2.map = map;
     if (coop) {
       map.coop = coopView(Module, coop);
@@ -821,8 +852,24 @@ async function start(getFiles, { cacheAfterStart = false, coop = null } = {}) {
       name: (slot) => (coop.players[slot] ? coop.players[slot].name : `Player ${slot + 1}`),
       colour: (slot) => PLAYER_COLOURS[slot % PLAYER_COLOURS.length],
     }) : null;
-    keyHooks.filter = (e, down) => (!!chat && !map.open && chat.handleKey(e, down)) || map.handleKey(e, down) ||
-      (!!(map.last && map.last.hasPlayer) && !!viewKeys.handle && viewKeys.handle(e, down));
+    // Quick save and load (single player): a snapshot of the whole game.
+    // Save states (single player): the Saves screen, the autosave after a job, Continue on the front page.
+    const states = coop ? null : new SaveStates({ Module, renderer, map });
+    const saves = states ? new SavesScreen({ states, pause: pauseGame, onClose: () => canvas.focus() }) : null;
+    window.gta2.states = states;
+    if (states) {
+      $('saves-open').title = `Save (20% of your cash, at least $10,000) or load (${SAVE_KEY} or F5)`;
+      $('saves-open').addEventListener('click', () => saves.show());
+      states.watchJobs();
+      if (loadSlot) states.load(loadSlot); // Continue on the front page
+    } else {
+      $('saves-open').hidden = true;
+    }
+    const radioKeys = wireRadioKeys(Module, audio, coop);
+    keyHooks.filter = (e, down) => (!!saves && saves.handleKey(e, down)) || (!!states && !map.open && states.handleKey(e, down)) ||
+      (!!chat && !map.open && chat.handleKey(e, down)) || map.handleKey(e, down) ||
+      // only while playing: the game's menus take R and T as letters (the player's name)
+      (!!(map.last && map.last.hasPlayer) && (radioKeys(e, down) || (!!viewKeys.handle && viewKeys.handle(e, down))));
     wireMapButtons(map);
     if (new URLSearchParams(location.search).has('devdata')) installDevHelpers(Module);
     // Developer option (?perfbeacon=PORT): every 2 s, post frame timings to a listener on this
@@ -841,13 +888,14 @@ async function start(getFiles, { cacheAfterStart = false, coop = null } = {}) {
       map.frame = () => { const t = performance.now(); mapFrame(); mapMs += performance.now() - t; };
       if (new URLSearchParams(location.search).has('nominimap')) map.minimapOn = false; // this visit only
       const take = Module.cwrap('gta2_port_take_frame_ms', 'number', ['number']);
-      const countPtr = Module._malloc(4);
       let last = { t: performance.now(), frames: renderer.stats.frames };
       setInterval(() => {
         const now = performance.now();
         const secs = (now - last.t) / 1000;
+        const countPtr = Module._malloc(4);
         const loopMs = take(countPtr);
         const slices = Module.HEAP32[countPtr >> 2];
+        Module._free(countPtr);
         const frames = renderer.stats.frames - last.frames;
         const report = {
           ua: navigator.userAgent, fps: +(frames / secs).toFixed(1), raf: +(rafs / secs).toFixed(1),
@@ -963,23 +1011,25 @@ if (onSite && !pageParams.has('coop')) {
 function serverGameFiles() {
   if (serverFiles) return serverFiles;
   const show = (text, fraction) => { landingProgress(text, fraction); setStatus(text); };
-  serverFiles = { fromCache: false };
-  serverFiles.promise = (async () => {
+  const job = serverFiles = { fromCache: false };
+  job.promise = (async () => {
     if (await fileCache.info()) {
-      serverFiles.fromCache = true;
+      job.fromCache = true;
       return fileCache.load();
     }
+    show(onServer ? 'Getting GTA2 from the game server…' : 'Connecting to the Internet Archive…', 0);
     // a static site: the freeware installer from the Internet Archive, unpacked in this browser
     const files = onServer ? await collectDevFiles(show) : await downloadFreeware(freewareProgress(show));
     show('GTA2 is ready.', 1);
     return files;
   })();
-  serverFiles.promise.catch((err) => {
-    const text = `Could not get the game files: ${err.message}.`;
+  job.promise.catch((err) => {
+    if (serverFiles === job) serverFiles = null; // the next Play starts a fresh attempt
+    const text = `Could not get the game files: ${String(err.message || err).replace(/\.$/, '')}. Press Play to try again.`;
     setStatus(text, true);
-    landingProgress(text, 0);
+    landingProgress(text, 0, true);
   });
-  return serverFiles;
+  return job;
 }
 
 /** Progress of the Internet Archive download, for a (text, fraction) display. */
@@ -1011,19 +1061,31 @@ async function wireServerHome() {
   let starting = false;
   if (onServer) savedCrews().then(showLeaderboard);
   else { $('crews').remove(); document.querySelector('#topnav a[href="#crews"]').remove(); } // saved crews live on our game server
+  // loadSlot: Continue (a save to load once the game has started)
+  const playNow = async (loadSlot = null) => {
+    if (starting) return;
+    starting = true;
+    const buttons = document.querySelectorAll('[data-play]');
+    for (const b of buttons) b.disabled = true;
+    setStatus('Starting…');
+    try {
+      const loaded = await serverGameFiles().promise;
+      hideLanding();
+      start(async () => loaded, { cacheAfterStart: needsCaching(), loadSlot });
+    } catch {
+      starting = false;
+      for (const b of buttons) b.disabled = false;
+    }
+  };
   showLanding({
     files,
     onCoop: () => { location.search = '?coop'; },
-    onPlay: async () => {
-      if (starting) return;
-      starting = true;
-      setStatus('Starting…');
-      try {
-        const loaded = await serverGameFiles().promise;
-        hideLanding();
-        start(async () => loaded, { cacheAfterStart: needsCaching() });
-      } catch { starting = false; }
-    },
+    onPlay: () => playNow(),
+  });
+  // Continue: the newest save this version of the game can load
+  listSaves().then((all) => {
+    const newest = all.find((s) => s.current);
+    if (newest) showContinue({ ...describe(newest), thumb: newest.thumb }, () => playNow(newest.slot));
   });
 }
 
