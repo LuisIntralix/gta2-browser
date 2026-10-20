@@ -14,6 +14,7 @@ links build/port/<preset>/gta2.{js,wasm} and copies the web shell from web/.
 import argparse
 import concurrent.futures
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,9 @@ PIN = '02de8beeb766644417f195d360eba33af0ee491f'
 EMSDK = ROOT / 'research/toolchains/emsdk/upstream/emscripten'
 EMXX = EMSDK / 'em++'
 PRESETS = ('debug', 'release')
+CASE_ALIASES = ROOT / 'build/port/case-aliases'
+INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
+SOURCE_SUFFIXES = {'.c', '.cpp', '.h', '.hpp'}
 
 COMMON = [
     '-std=gnu++17', '-fshort-wchar', '-mms-bitfields', '-fno-strict-return', '-fms-extensions', '-fdeclspec', '-w',
@@ -35,7 +39,9 @@ COMMON = [
 GAME_ONLY = [
     '-include', str(ROOT / 'port/core/compat/port_prefix.h'),
     '-I', str(ROOT / 'port/core/compat'), '-I', str(CORE / 'Source'), '-I', str(CORE),
+    '-I', str(CASE_ALIASES),
 ]
+INCLUDE_DIRS = (ROOT / 'port/core/compat', CORE / 'Source', CORE, ROOT / 'port')
 PORT_ONLY = GAME_ONLY + ['-I', str(ROOT / 'port')]
 OPT = {'debug': ['-O1', '-g'], 'release': ['-O2']}
 LINK = [
@@ -58,6 +64,42 @@ def prepare():
         subprocess.run(['git', '-C', str(CORE), '-c', 'user.name=GTA2 port', '-c', 'user.email=port@localhost',
                         'am', '-q', *map(str, patches)], check=True)
     print(f'prepared {CORE} with {len(patches)} patches')
+
+
+def source_files(root):
+    for path in root.rglob('*'):
+        if '.git' not in path.parts and path.suffix.lower() in SOURCE_SUFFIXES and path.is_file():
+            yield path
+
+
+def make_case_aliases():
+    """Symlinks for #include names that differ only in case from the file on disk.
+
+    The sources were written on case-insensitive filesystems (Windows, macOS), so on
+    Linux `#include "Fix16.hpp"` misses `fix16.hpp`. Elsewhere no alias is created.
+    """
+    shutil.rmtree(CASE_ALIASES, ignore_errors=True)
+    by_lower_name = {}
+    for root in INCLUDE_DIRS:
+        for path in source_files(root):
+            by_lower_name.setdefault(path.relative_to(root).as_posix().lower(), path)
+
+    created = 0
+    for root in INCLUDE_DIRS:
+        for src in source_files(root):
+            for name in INCLUDE_RE.findall(src.read_text(errors='replace')):
+                name = name.replace('\\', '/')
+                search = (src.parent, *INCLUDE_DIRS)
+                target = by_lower_name.get(name.lower())
+                if target is None or any((d / name).exists() for d in search):
+                    continue
+                alias = CASE_ALIASES / name
+                alias.parent.mkdir(parents=True, exist_ok=True)
+                if not alias.is_symlink():
+                    alias.symlink_to(target)
+                    created += 1
+    if created:
+        print(f'build_port: {created} case-insensitive include aliases in {CASE_ALIASES}')
 
 
 def up_to_date(obj, dep, flags_file, flags):
@@ -97,6 +139,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.prepare or not CORE.exists():
         prepare()
+    make_case_aliases()
 
     out = ROOT / 'build/port' / a.preset
     jobs = []
@@ -136,7 +179,7 @@ def main(argv=None):
     # unshield (WebAssembly) for unpacking the freeware installer in the browser
     unshield = ROOT / 'build/unshield'
     if not (unshield / 'unshield.wasm').exists():
-        subprocess.run([str(ROOT / 'scripts/build_unshield_wasm.sh')], check=True)
+        subprocess.run(['sh', str(ROOT / 'scripts/build_unshield_wasm.sh')], check=True)
     for name in ('unshield.js', 'unshield.wasm', 'unshield-LICENSE.txt'):
         shutil.copy2(unshield / name, out / name)
     print(f'build_port: {out / "gta2.js"} ({len(objs)} objects)')
