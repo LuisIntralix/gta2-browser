@@ -3,6 +3,7 @@
 // spirit of browser-game launchers such as Eaglercraft's; our own code and style.
 
 import { LOAD_KEY, SAVE_KEY } from './savestate.js';
+import { findPad, listPads, padName } from './gamepad.js';
 
 // What each key does, by group (colour). Matches PORT_CONTROLS in shell.js
 // and the shell's own keys (map, scoreboard, view distance).
@@ -74,22 +75,146 @@ function buildKeyboard(root) {
   root.append(board);
 }
 
-/** The legend: each control with its keys as keycaps. */
-function buildLegend(root) {
+/** The legend: each control with its keys (or buttons) as keycaps. */
+function buildLegend(root, controls, capLabel) {
   const list = el('ul', { class: 'legend' });
-  for (const c of CONTROLS) {
+  for (const c of controls) {
     const item = el('li');
     item.style.setProperty('--c', GROUPS[c.group].colour);
     item.append(el('span', { class: 'dot' }));
     const caps = el('span', { class: 'caps' });
     c.keys.forEach((k, i) => {
       if (i) caps.append(el('span', { class: 'sep' }, '/'));
-      caps.append(el('kbd', {}, k === 'Return' ? 'Enter' : k));
+      caps.append(el('kbd', {}, capLabel(k)));
     });
     item.append(caps, el('span', { class: 'does' }, c.does));
     list.append(item);
   }
   root.append(list);
+}
+
+// ---- controller: what each button does while playing (web/gamepad.js PLAY) ----
+
+const PAD_LABELS = {
+  cross: '✕', circle: '○', square: '□', triangle: '△', l1: 'L1', r1: 'R1', l2: 'L2', r2: 'R2',
+  l3: 'L3', r3: 'R3', create: 'Create', options: 'Options', dpad: 'D-pad', stick: 'Left stick',
+};
+
+export const PAD_CONTROLS = [
+  { keys: ['stick', 'dpad'], does: 'Walk / drive', group: 'move' },
+  { keys: ['r2', 'l2'], does: 'Accelerate / brake', group: 'move' },
+  { keys: ['cross'], does: 'Shoot / punch', group: 'fight' },
+  { keys: ['triangle'], does: 'Get in or out of a car', group: 'car' },
+  { keys: ['square'], does: 'Jump / handbrake', group: 'car' },
+  { keys: ['l1', 'r1'], does: 'Previous / next weapon', group: 'weapon' },
+  { keys: ['circle', 'l3'], does: 'Special (horn, car extras)', group: 'weapon' },
+  { keys: ['create'], does: 'Map, waypoints and your current job', group: 'info' },
+  { keys: ['r3'], does: 'Status', group: 'info' },
+  { keys: ['options'], does: 'Game menu', group: 'menu' },
+];
+
+// The diagram: a DualSense seen from the front, triggers behind the bumpers.
+// Each shape: [control, kind, x, y, w, h, label].
+const PAD_SHAPES = [
+  ['l2', 'rect', 70, 8, 92, 30, 'L2'], ['r2', 'rect', 358, 8, 92, 30, 'R2'],
+  ['l1', 'rect', 70, 42, 92, 20, 'L1'], ['r1', 'rect', 358, 42, 92, 20, 'R1'],
+  ['touchpad', 'rect', 186, 74, 148, 72, ''],
+  ['create', 'rect', 160, 82, 18, 30, ''], ['options', 'rect', 342, 82, 18, 30, ''],
+  ['dpad', 'rect', 102, 108, 28, 28, ''], ['dpad', 'rect', 102, 172, 28, 28, ''],
+  ['dpad', 'rect', 70, 140, 28, 28, ''], ['dpad', 'rect', 134, 140, 28, 28, ''],
+  ['triangle', 'circle', 390, 122, 34, 34, '△'], ['cross', 'circle', 390, 186, 34, 34, '✕'],
+  ['square', 'circle', 358, 154, 34, 34, '□'], ['circle', 'circle', 422, 154, 34, 34, '○'],
+  ['stick', 'circle', 178, 226, 54, 54, 'L3'], ['r3', 'circle', 342, 226, 54, 54, 'R3'],
+  ['ps', 'circle', 260, 214, 22, 22, ''],
+];
+const PAD_BODY = 'M120 64 H400 C470 64 505 110 512 190 C520 280 500 330 460 330 C420 330 400 290 370 262 H150 '
+  + 'C120 290 100 330 60 330 C20 330 0 280 8 190 C15 110 50 64 120 64 Z';
+
+/** The group a pad control belongs to (its colour), or null if it does nothing in the game. */
+function padGroup(control) {
+  const c = PAD_CONTROLS.find((ctl) => ctl.keys.includes(control));
+  return c ? c.group : null;
+}
+
+const svg = (tag, attrs = {}, ...children) => {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  for (const c of children) e.append(c);
+  return e;
+};
+
+/** A controller with the game's buttons lit in their group's colour. */
+function buildPad(root) {
+  const pad = svg('svg', { class: 'pad-diagram', viewBox: '0 0 520 340', 'aria-hidden': 'true' },
+    svg('path', { class: 'pad-body', d: PAD_BODY }));
+  for (const [control, kind, x, y, w, h, label] of PAD_SHAPES) {
+    const group = padGroup(control);
+    const shape = kind === 'circle'
+      ? svg('circle', { cx: x, cy: y, r: w / 2 })
+      : svg('rect', { x, y, width: w, height: h, rx: 7 });
+    shape.setAttribute('class', `pad-part${group ? ' lit' : ''}`);
+    if (group) shape.style.setProperty('--c', GROUPS[group].colour);
+    pad.append(shape);
+    if (label) {
+      const [cx, cy] = kind === 'circle' ? [x, y] : [x + w / 2, y + h / 2];
+      const text = svg('text', { x: cx, y: cy, class: `pad-label${group ? ' lit' : ''}` }, label);
+      if (group) text.style.setProperty('--c', GROUPS[group].colour);
+      pad.append(text);
+    }
+  }
+  root.append(pad);
+}
+
+/** "Press a button" until a controller is seen, then its name. */
+function watchPad(status, onFound) {
+  const show = () => {
+    const pad = findPad(listPads());
+    status.textContent = pad
+      ? `Connected: ${padName(pad)}.`
+      : 'Connect a controller (DualSense, DualShock 4, Xbox) and press any button so the browser sees it.';
+    status.classList.toggle('found', !!pad);
+    if (pad) onFound();
+  };
+  window.addEventListener('gamepadconnected', show);
+  window.addEventListener('gamepaddisconnected', show);
+  show();
+}
+
+/** Keyboard / Controller tabs (arrow keys move between them). */
+function wireTabs(tablist) {
+  const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+  const select = (tab) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    }
+  };
+  for (const tab of tabs) tab.addEventListener('click', () => select(tab));
+  tablist.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    const next = tabs[(tabs.indexOf(document.activeElement) + step + tabs.length) % tabs.length];
+    select(next);
+    next.focus();
+    e.preventDefault();
+  });
+  return (id) => select(tabs.find((t) => t.id === id));
+}
+
+function buildControls() {
+  buildKeyboard(document.getElementById('kb-root'));
+  buildLegend(document.getElementById('legend-root'), CONTROLS, (k) => (k === 'Return' ? 'Enter' : k));
+  buildPad(document.getElementById('pad-root'));
+  buildLegend(document.getElementById('pad-legend-root'), PAD_CONTROLS, (k) => PAD_LABELS[k]);
+  const selectTab = wireTabs(document.getElementById('controls-tabs'));
+  let switched = false;
+  // the first time a controller shows up, its tab opens
+  watchPad(document.getElementById('pad-status'), () => {
+    if (!switched) selectTab('tab-pad');
+    switched = true;
+  });
 }
 
 // ---- options: saved in this browser, used when the game starts (the in-game buttons still work) ----
@@ -144,8 +269,7 @@ export function showLanding({ onPlay, onCoop, files }) {
   document.body.classList.add('landing-on');
   document.getElementById('landing').hidden = false;
   document.getElementById('topnav').hidden = false;
-  buildKeyboard(document.getElementById('kb-root'));
-  buildLegend(document.getElementById('legend-root'));
+  buildControls();
   buildOptions(document.getElementById('options-root'));
   for (const b of document.querySelectorAll('[data-play]')) b.addEventListener('click', () => onPlay());
   for (const b of document.querySelectorAll('[data-coop]')) b.addEventListener('click', () => onCoop());

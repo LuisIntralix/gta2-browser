@@ -1,7 +1,8 @@
 // Unit tests for web/gamepad.js: node --test scripts/port/gamepad_test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GamepadInput, codesFor, pressedButtons } from '../../web/gamepad.js';
+import { GamepadInput, PLAY, codesFor, padName, pressedButtons } from '../../web/gamepad.js';
+import { PAD_CONTROLS } from '../../web/landing.js';
 
 globalThis.document = { hasFocus: () => true };
 
@@ -63,4 +64,16 @@ test('releaseAll lets go of every held key', () => {
   input.poll();
   input.releaseAll();
   assert.deepEqual(events, ['+KeyL', '+KeyJ', '-KeyL', '-KeyJ']);
+});
+
+test('the controller legend on the front page lists every mapped button', () => {
+  const directions = ['up', 'down', 'left', 'right'];
+  const shown = new Set(PAD_CONTROLS.flatMap((c) => c.keys).flatMap((k) => (k === 'stick' || k === 'dpad' ? directions : [k])));
+  assert.deepEqual([...shown].sort(), Object.keys(PLAY).sort());
+});
+
+test('padName drops the ids Chrome and Firefox add', () => {
+  assert.equal(padName({ id: 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)' }), 'DualSense Wireless Controller');
+  assert.equal(padName({ id: '054c-0ce6-DualSense Wireless Controller' }), 'DualSense Wireless Controller');
+  assert.equal(padName({ id: '' }), 'Controller');
 });

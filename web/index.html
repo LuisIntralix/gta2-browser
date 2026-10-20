@@ -144,7 +144,18 @@
       border: 1px solid #2a2a31; }
     .seg button { white-space: nowrap; font: 600 12px system-ui, sans-serif; padding: .35rem .6rem; border-radius: 7px; border: 0; cursor: pointer;
       background: none; color: #aaa7a1; }
-    .seg button[aria-checked="true"] { background: #f5c518; color: #121212; }
+    .seg button[aria-checked="true"], .seg button[aria-selected="true"] { background: #f5c518; color: #121212; }
+    .controls-tabs { margin-bottom: 1rem; }
+    .controls-tabs button { font-size: 14px; padding: .45rem 1rem; }
+    #pad-status.found { color: #9fdcae; }
+    .pad-wrap { padding: 14px; border-radius: 14px; background: #121216; border: 1px solid #26262c; }
+    .pad-diagram { display: block; width: min(520px, 100%); margin: 0 auto; }
+    .pad-body { fill: #1d1d23; stroke: #2a2a31; stroke-width: 2; }
+    .pad-part { fill: #25252c; stroke: #33333b; stroke-width: 1.5; }
+    .pad-part.lit { fill: color-mix(in srgb, var(--c) 18%, #1d1d23); stroke: color-mix(in srgb, var(--c) 70%, transparent); }
+    .pad-label { font: 700 13px system-ui, sans-serif; fill: #77757f; text-anchor: middle; dominant-baseline: central; }
+    .pad-label.lit { fill: var(--c); }
+    .pad-note { margin: 1rem 0 0; font-size: 14px; }
     .board { width: 100%; border-collapse: collapse; font-size: 14px; }
     .board th { text-align: left; color: #8c8a85; font-weight: 600; font-size: 12px; padding: .4rem .5rem; border-bottom: 1px solid #2a2a31; }
     .board td { padding: .55rem .5rem; border-bottom: 1px solid #202026; vertical-align: top; }
@@ -293,9 +304,22 @@
 
       <section class="card" id="controls">
         <h2 class="section-title">Controls</h2>
-        <p class="section-sub">Keyboard. You can change any of them in the game under Options → Controls.</p>
-        <div id="kb-root"></div>
-        <div id="legend-root"></div>
+        <div class="seg controls-tabs" id="controls-tabs" role="tablist" aria-label="Controls">
+          <button type="button" role="tab" id="tab-kb" aria-controls="panel-kb" aria-selected="true">Keyboard</button>
+          <button type="button" role="tab" id="tab-pad" aria-controls="panel-pad" aria-selected="false" tabindex="-1">Controller</button>
+        </div>
+        <div id="panel-kb" role="tabpanel" aria-labelledby="tab-kb">
+          <p class="section-sub">You can change any of them in the game under Options → Controls.</p>
+          <div id="kb-root"></div>
+          <div id="legend-root"></div>
+        </div>
+        <div id="panel-pad" role="tabpanel" aria-labelledby="tab-pad" hidden>
+          <p class="section-sub" id="pad-status" role="status"></p>
+          <div class="pad-wrap" id="pad-root"></div>
+          <div id="pad-legend-root"></div>
+          <p class="section-sub pad-note">In the game's menus and on the map: ✕ confirms, ○ goes back, the left stick or
+            d-pad moves, L1 / R1 zoom the map.</p>
+        </div>
       </section>
 
       <section class="card" id="options">

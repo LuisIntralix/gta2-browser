@@ -13,7 +13,7 @@ const BUTTONS = {
 };
 
 // While playing: the port's default controls (web/shell.js PORT_CONTROLS) plus the shell's keys.
-const PLAY = {
+export const PLAY = {
   up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD',
   r2: 'KeyW', l2: 'KeyS', // accelerate / brake
   cross: 'KeyL', triangle: 'Enter', square: 'Space', circle: 'KeyI',
@@ -27,6 +27,21 @@ const MENU = {
   cross: 'Enter', circle: 'Escape', options: 'Escape', create: 'KeyM',
   l1: 'Minus', r1: 'Equal', // map zoom
 };
+
+export const listPads = () => (navigator.getGamepads ? [...navigator.getGamepads()] : []);
+
+/** The first connected pad with the browser's standard layout, or null. */
+export const findPad = (pads) => pads.find((p) => p && p.connected && p.mapping === 'standard') || null;
+
+/**
+ * The pad's name without the vendor and product ids the browsers add:
+ * Chrome "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)",
+ * Firefox "054c-0ce6-DualSense Wireless Controller".
+ */
+export function padName(pad) {
+  const name = pad.id.replace(/\s*\(.*\)\s*$/, '').replace(/^[0-9a-f]{1,4}-[0-9a-f]{1,4}-/i, '').trim();
+  return name || 'Controller';
+}
 
 /** Names of the pressed buttons; the left stick counts as the d-pad. */
 export function pressedButtons(pad) {
@@ -53,7 +68,7 @@ export class GamepadInput {
    * @param {(code: string, down: boolean) => void} send presses or releases a key
    * @param {() => boolean} isPlaying true while the player is in the city (not in a menu or the map)
    */
-  constructor({ send, isPlaying, getPads = () => navigator.getGamepads(), onConnect = () => {} }) {
+  constructor({ send, isPlaying, getPads = listPads, onConnect = () => {} }) {
     this.send = send;
     this.isPlaying = isPlaying;
     this.getPads = getPads;
@@ -90,7 +105,7 @@ export class GamepadInput {
   }
 
   activePad() {
-    return [...this.getPads()].find((p) => p && p.connected && p.mapping === 'standard') || null;
+    return findPad([...this.getPads()]);
   }
 
   poll() {
