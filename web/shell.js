@@ -5,12 +5,14 @@
 import createGta2 from './gta2.js';
 import { SAVE_KEY, SaveStates, exportSaves, importSaves, listSaves, toast } from './savestate.js';
 import { SavesScreen, describe } from './saves.js';
+import { ControlsScreen } from './controls.js';
 import { Gta2Renderer } from './renderer.js';
 import { SaveStorage } from './storage.js';
 import { Gta2Audio } from './audio.js';
 import { GameFileCache, downloadFreeware, unpackInstallerFile } from './gamefiles.js';
 import { Gta2Map, exportDiscovery, importDiscovery } from './map.js';
 import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js';
+import { count, initStats, startPlayClock } from './stats.js';
 import { CoopChat } from './chat.js';
 import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js';
 
@@ -24,7 +26,8 @@ const REG_ROOT = 'hklm\\software\\dma design ltd\\gta2';
 // Browser-port default controls (DirectInput scan codes), in the game's slot
 // order. The original's defaults were arrows / LCtrl / Return / Space / Z / X /
 // Tab / LAlt / RShift; Ctrl and Alt clash with macOS and browser shortcuts.
-// Players can still change any of these in Options -> Controls.
+// Players can change any of these on the Controls screen (Options in the game's menu, or the
+// toolbar's Controls button; web/controls.js).
 const PORT_CONTROLS = [
   0x11, // 0 forward: W
   0x1f, // 1 back: S
@@ -827,7 +830,12 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
     }
     const rc = Module.ccall('gta2_start', 'number', ['string', 'string'], [GAME_DIR, startOptions.commandLine || '']);
     if (rc < 0) setStatus(`Could not start (code ${rc}).`, true);
-    else if (cacheAfterStart) setTimeout(() => cachePickedFiles(files), 3000);
+    else {
+      if (cacheAfterStart) setTimeout(() => cachePickedFiles(files), 3000);
+      count(coop ? `play/coop-${coop.mode}` : 'play/solo');
+      if (coop && coop.lobby.host) count(`match/${coop.players.length}-players`);
+      startPlayClock(coop ? 'coop' : 'solo');
+    }
     // Map screen (M), minimap and waypoint: not in the original game (T33).
     const releaseAll = Module.cwrap('gta2_port_release_all_keys', null, []);
     // The map screen and the Saves screen pause the game and its sound.
@@ -872,7 +880,14 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
       $('saves-open').hidden = true;
     }
     const radioKeys = wireRadioKeys(Module, audio, coop);
-    keyHooks.filter = (e, down) => (!!saves && saves.handleKey(e, down)) || (!!states && !map.open && states.handleKey(e, down)) ||
+    // The Controls screen: the game menu's Options (which launched GTA2 Manager) and the toolbar.
+    const controls = new ControlsScreen({
+      Module, keys: KEYS, defaults: PORT_CONTROLS, regPath: `${REG_ROOT}\\control`,
+      onChange: () => saveRegistry(Module), pause: pauseGame, onClose: () => canvas.focus(),
+    });
+    Module.onOpenOptions = () => controls.show();
+    $('controls-open').addEventListener('click', () => controls.show());
+    keyHooks.filter = (e, down) => controls.handleKey(e, down) || (!!saves && saves.handleKey(e, down)) || (!!states && !map.open && states.handleKey(e, down)) ||
       (!!chat && !map.open && chat.handleKey(e, down)) || map.handleKey(e, down) ||
       // only while playing: the game's menus take R and T as letters (the player's name)
       (!!(map.last && map.last.hasPlayer) && (radioKeys(e, down) || (!!viewKeys.handle && viewKeys.handle(e, down))));
@@ -995,6 +1010,7 @@ const onServer = !!(serverConfig && serverConfig.server);
 const onSite = onServer || !!(serverConfig && serverConfig.static);
 if (onServer) document.body.classList.add('on-server');
 if (onSite) document.body.classList.add('on-site');
+if (initStats(serverConfig)) $('stats-faq').hidden = false; // anonymous play counts (the public site)
 if (onSite && !pageParams.has('coop')) {
   wireServerHome();
 } else if (pageParams.has('coop')) {
@@ -1008,6 +1024,7 @@ if (onSite && !pageParams.has('coop')) {
 } else {
   offerSavedFiles();
 }
+document.body.classList.remove('booting');
 
 /**
  * On our game server: the game files from this browser's copy when there is one,
@@ -1026,11 +1043,13 @@ function serverGameFiles() {
     show(onServer ? 'Getting GTA2 from the game server…' : 'Connecting to the Internet Archive…', 0);
     // a static site: the freeware installer from the Internet Archive, unpacked in this browser
     const files = onServer ? await collectDevFiles(show) : await downloadFreeware(freewareProgress(show));
+    if (!onServer) count('download/gta2');
     show('GTA2 is ready.', 1);
     return files;
   })();
   job.promise.catch((err) => {
     if (serverFiles === job) serverFiles = null; // the next Play starts a fresh attempt
+    if (!onServer) count('download/failed', { title: String(err.message || err).slice(0, 200) });
     const text = `Could not get the game files: ${String(err.message || err).replace(/\.$/, '')}. Press Play to try again.`;
     setStatus(text, true);
     landingProgress(text, 0, true);
@@ -1061,6 +1080,7 @@ function needsCaching() {
 /** Our game server's front page (the landing page): Play, Play with friends, controls, options, help. */
 async function wireServerHome() {
   $('picker').hidden = true;
+  count('/', { event: false });
   // On a static site the 360 MB download only starts when the player presses Play (or hosts/joins).
   const cached = !onServer && !!(await fileCache.info());
   const files = onServer || cached ? serverGameFiles() : null;
@@ -1169,6 +1189,7 @@ function showLastResults() {
 /** ?coop: the co-op lobby (D20). */
 function wireCoopLobby() {
   $('coop').hidden = false;
+  count('/coop', { event: false });
   if (onSite) {
     // the landing page's bar, leading back to the front page (relative: a static site may live in a folder)
     $('topnav').hidden = false;

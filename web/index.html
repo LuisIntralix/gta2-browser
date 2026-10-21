@@ -36,6 +36,18 @@
     #saves-screen { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
       padding: 16px; background: rgba(0, 0, 0, .72); }
     #saves-screen[hidden] { display: none; }
+    #controls-screen { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+      padding: 16px; background: rgba(0, 0, 0, .72); }
+    #controls-screen[hidden] { display: none; }
+    .controls-panel { width: min(560px, 100%); }
+    .controls-list { display: grid; gap: .35rem; }
+    .controls-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .3rem .5rem;
+      border-radius: 6px; background: #1d2027; }
+    .controls-row button, .controls-actions button { min-width: 8.5rem; padding: .4rem .7rem; border-radius: 5px;
+      border: 1px solid #3a3f4b; background: #262a33; color: #e8e8e8; cursor: pointer; font: inherit; font-size: .9rem; }
+    .controls-row button.waiting { border-color: #f5c518; color: #f5c518; }
+    .controls-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+    .controls-actions button.primary { background: #f5c518; border-color: #f5c518; color: #111; font-weight: 600; }
     .saves-panel { width: min(980px, 100%); max-height: 100%; overflow: auto; padding: 1.2rem 1.4rem; border-radius: 10px;
       background: #15171c; border: 1px solid #2a2e37; color: #e8e8e8; }
     .saves-head { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem; }
@@ -74,6 +86,8 @@
       font: 14px system-ui, sans-serif; padding: .45rem .6rem; border-radius: 6px; border: 1px solid #f5c518;
       background: rgba(10,10,12,.92); color: #fff; outline: none; }
     [hidden] { display: none !important; }
+    /* until shell.js picks the screen (landing page, lobby or folder picker), show none of them */
+    body.booting #picker { visibility: hidden; }
 
     /* ---- landing page (D21 front page) ---- */
     body.landing-on { overflow-y: auto; height: auto; min-height: 100%; }
@@ -232,7 +246,7 @@
       cursor: pointer; }
   </style>
 </head>
-<body>
+<body class="booting">
   <header id="topnav" hidden>
     <a class="logo" href="#top">GTA2<small>in your browser</small></a>
     <nav aria-label="Sections">
@@ -293,7 +307,7 @@
 
       <section class="card" id="controls">
         <h2 class="section-title">Controls</h2>
-        <p class="section-sub">Keyboard. You can change any of them in the game under Options → Controls.</p>
+        <p class="section-sub">Keyboard. Change any of them in the game: Options on the main menu, or the Controls button under the game.</p>
         <div id="kb-root"></div>
         <div id="legend-root"></div>
       </section>
@@ -325,12 +339,17 @@
         <details><summary>It runs slowly or looks wrong</summary>
           <p>Turn on the FPS counter in Options. Close other heavy tabs, and try another browser if it stays low.
             "Motion: Original 30 fps" and "Screen shape: 4:3 original" are the lightest settings.</p></details>
+        <details id="stats-faq" hidden><summary>Do you track me?</summary>
+          <p>No cookies and no personal data. This site counts visits, games started, how long games run
+            (in steps such as "over 30 minutes") and first-time downloads, anonymously with
+            <a href="https://www.goatcounter.com" target="_blank" rel="noopener">GoatCounter</a>,
+            so we know how many people play.</p></details>
         <details><summary>Is it legal?</summary>
           <p>GTA2 was released as freeware by Rockstar Games in 2004. This is an unofficial, non-commercial fan
             project, not affiliated with Rockstar Games or Take-Two Interactive. GTA2 is © Rockstar Games.</p></details>
       </section>
-      <p class="landing-foot">Engine from the <a href="https://github.com/CriminalRETeam/gta2_re" target="_blank" rel="noopener">gta2_re</a>
-        decompilation by the CriminalRETeam contributors · Grand Theft Auto 2 © Rockstar Games</p>
+      <p class="landing-foot"><a href="https://github.com/M1sterMo/gta2-browser" target="_blank" rel="noopener">Source and credits on GitHub</a>
+        · Grand Theft Auto 2 © Rockstar Games</p>
     </div>
     <section id="picker">
       <h1>GTA2 in the browser</h1>
@@ -431,6 +450,7 @@
       <button id="fullscreen" type="button">Full screen</button>
       <button id="mute" type="button">Mute</button>
       <button id="saves-open" type="button">Saves</button>
+      <button id="controls-open" type="button" title="Change the game's keys">Controls</button>
       <button id="export-saves" type="button">Export saves</button>
       <label>Import saves<input id="import-saves" type="file" accept="application/json,.json"></label>
     </div>

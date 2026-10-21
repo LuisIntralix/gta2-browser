@@ -590,9 +590,15 @@ Developer options (append to the URL, local only):
 | Saves screen (port) | ⌘⇧S (Ctrl+Shift+S) | none |
 
 The shell seeds these into the game's `Control` registry key at start-up. The original
-defaults stay in `gDefaultControls_61A9E4`. Changes made in Options → Controls are saved
-per browser and take precedence. Menus keep their hard-coded keys: arrows, Enter, Esc.
+defaults stay in `gDefaultControls_61A9E4`. Menus keep their hard-coded keys: arrows, Enter, Esc.
 The change was requested because Ctrl and Alt clash with macOS and browser shortcuts.
+
+**Changing keys: the Controls screen** (`web/controls.js`, issue #2 on M1sterMo/gta2-browser).
+- **Opening it.** In the original game, Options on the main menu launched the separate GTA2 Manager program and minimised the game. The browser has no such program, so the game used to exit with "Failed to launch 'GTA2 Manager' correctly". Patch 0024 makes `Start_GTA2Manager_5E4DE0` call `Gta2Port_OpenOptions` instead (`port/platform/options_web.cpp`), and the menu stays where it is. The toolbar's Controls button opens the same screen.
+- **What it does.** It lists the twelve control slots. Click one, then press a key; Esc cancels. A key another action already had swaps over, and the screen says so. Default keys restores the table above.
+- **Keys it refuses.** Keys the browser version uses itself in play: M, Tab, R, T, − and =, F5/F9, Esc.
+- **How the change applies.** It writes `hklm\…\gta2\control\0-11`, the values GTA2 Manager wrote, and calls `gta2_port_reload_controls`. That export runs the game's own `get_registry_controls_498C00`, so the new key works at once, in the menu or mid-game. The registry is saved in this browser with the other settings.
+- **Tested** in the in-app Chromium: Options opens the screen and the game keeps running; M is refused with its reason; Forward set to ↑ walks the player forward and W no longer does; Default keys restores W.
 
 ## How it is put together
 
@@ -636,6 +642,13 @@ Patch series in short:
     yielding while waiting, the match ending back at the shell, sync diagnostics.
 
 ## Findings worth keeping
+
+- **Wide strings measured half their length (fixed 2026-10-21, issue #1).**
+  - **Symptom.** Player-name cheats (GOURANGA, then UKGAMER, IAMDAVEJ…) never worked.
+  - **Cause.** The cheat check hashed only "GOUR", because `wcslen` returned 4 for an 8-letter name. LLVM (emsdk's clang 24) recognises "count until 0" loops and replaces them with a call to `wcslen`. The C library's `wcslen` counts 4-byte characters, while `-fshort-wchar` makes them 2. So the port's own `gta2_wcslen` (`crt_compat.cpp`), written as such a loop, compiled into a call to the 4-byte `wcslen`. One loop in `Frontend.cpp` did the same.
+  - **Fix.** `-fno-builtin-wcslen` in `scripts/build_port.py`.
+  - **Check after a toolchain update.** `llvm-nm build/port/<preset>/obj/*/*.o | grep " U wcslen"` must print nothing.
+  - **Reach.** Every wide-string length in the game was affected (text widths, name lengths), not only cheats.
 
 - **Why upstream's standalone build stalls on entering gameplay.** Six tables are built
   only from the ImGui debug path. They hold object templates, slopes, trig tables,

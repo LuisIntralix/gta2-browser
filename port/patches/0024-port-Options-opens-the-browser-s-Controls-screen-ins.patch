@@ -1,0 +1,31 @@
+From 758e94981301b9fc6fee3738306a78438b50423e Mon Sep 17 00:00:00 2001
+From: GTA2 port <port@localhost>
+Date: Wed, 21 Oct 2026 15:02:21 +1100
+Subject: [PATCH 24/24] port: Options opens the browser's Controls screen
+ instead of launching GTA2 Manager (the game no longer exits)
+
+---
+ Source/winmain.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Source/winmain.cpp b/Source/winmain.cpp
+index 938fcae..e1e8222 100644
+--- a/Source/winmain.cpp
++++ b/Source/winmain.cpp
+@@ -2245,6 +2245,13 @@ EXPORT void __stdcall ParseCommandLine_4DA320(char_type* pCommandLine)
+ MATCH_FUNC(0x5E4DE0)
+ EXPORT void Start_GTA2Manager_5E4DE0()
+ {
++#ifdef GTA2_PORT
++    // Options launched the separate GTA2 Manager program and the browser has none: the shell shows
++    // its own Controls screen instead, and the front end stays where it is (issue #2).
++    extern void Gta2Port_OpenOptions();
++    Gta2Port_OpenOptions();
++    return;
++#endif
+     ShowWindow(gHwnd_707F04, SW_SHOWMINNOACTIVE);
+     HANDLE hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, "GBH_BOB_MUTEX");
+     if (hMutex)
+-- 
+2.53.0
+

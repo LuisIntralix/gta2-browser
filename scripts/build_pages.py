@@ -25,6 +25,9 @@ SITE = ROOT / 'build/pages'
 FILES = ('index.html', 'gta2.js', 'gta2.wasm', 'unshield.js', 'unshield.wasm', 'unshield-LICENSE.txt')
 SUFFIXES = ('.js',)
 DIRS = ('vendor',)  # not img/: game screenshots stay off public pages (AGENTS.md); the hero closes up
+# Anonymous play counts (web/stats.js): the GoatCounter endpoint, https://<code>.goatcounter.com/count.
+# Empty: nothing is counted.
+STATS = ''
 GAME_FILE = ('.gmp', '.sty', '.sdt', '.raw', '.wav', '.gxt', '.scr', '.mmp', '.exe', '.dll', '.bik', '.tgx')
 
 README = """# GTA2 in your browser
@@ -45,7 +48,8 @@ README = """# GTA2 in your browser
 branch*, `main`, `/ (root)`. It goes live at `https://<you>.github.io/gta2/`. Any static host
 works too; serve the files as they are.
 
-This repo is the built site only and holds **no game files**. The engine is the
+This repo is the built site only and holds **no game files**. The source code and credits are
+in [M1sterMo/gta2-browser](https://github.com/M1sterMo/gta2-browser). The engine is the
 [gta2_re](https://github.com/CriminalRETeam/gta2_re) decompilation, compiled to WebAssembly.
 
 GTA2 is © Rockstar Games. This is an unofficial, non-commercial fan project, not affiliated
@@ -98,7 +102,10 @@ def main():
     for d in DIRS:
         shutil.copytree(RELEASE / d, SITE / d)
     version_urls()
-    (SITE / 'config.json').write_text(json.dumps({'static': True}) + '\n')
+    config = {'static': True}
+    if STATS:
+        config['stats'] = STATS
+    (SITE / 'config.json').write_text(json.dumps(config) + '\n')
     (SITE / '.nojekyll').write_text('')
     (SITE / 'README.md').write_text(README)
     shipped = [p for p in SITE.rglob('*') if p.is_file() and '.git' not in p.parts]
