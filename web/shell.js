@@ -406,9 +406,17 @@ function syntheticKey(code) {
   return { code, key: '', repeat: false, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault() {} };
 }
 
-function wireGamepad(handleKey, isPlaying) {
+// remap: the controller presses the default keys; this gives the key the player bound instead.
+function wireGamepad(handleKey, isPlaying, remap = (code) => code) {
+  const held = new Map(); // a button's key when pressed, so its release lets go of the same key
+  const send = (code, down) => {
+    let key = held.get(code);
+    if (down || key === undefined) key = isPlaying() ? remap(code) : code;
+    if (down) held.set(code, key); else held.delete(code);
+    handleKey(syntheticKey(key), down);
+  };
   const gamepad = new GamepadInput({
-    send: (code, down) => handleKey(syntheticKey(code), down),
+    send,
     isPlaying,
     onConnect: (pad) => toast(pad.mapping === 'standard' ? 'Controller connected' : 'This controller is not supported by the browser', pad.mapping !== 'standard'),
   });
@@ -911,7 +919,8 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
       (!!(map.last && map.last.hasPlayer) && (radioKeys(e, down) || (!!viewKeys.handle && viewKeys.handle(e, down))));
     wireMapButtons(map);
     window.gta2.gamepad = wireGamepad(handleKey,
-      () => !!(map.last && map.last.hasPlayer) && !map.open && !(saves && saves.open) && !(chat && chat.open));
+      () => !!(map.last && map.last.hasPlayer) && !map.open && !(saves && saves.open) && !(chat && chat.open) && !controls.open,
+      (code) => controls.rebound(code));
     if (new URLSearchParams(location.search).has('devdata')) installDevHelpers(Module);
     // Developer option (?perfbeacon=PORT): every 2 s, post frame timings to a listener on this
     // computer (for comparing browsers).

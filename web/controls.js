@@ -86,6 +86,18 @@ export class ControlsScreen {
     return out;
   }
 
+  /**
+   * A default key, as the controller presses it (web/gamepad.js sends the default controls), turned
+   * into the key now bound to that action, so the controller follows the player's choices.
+   */
+  rebound(code) {
+    const scan = this.keys[code] && this.keys[code][0];
+    const slot = scan === undefined ? -1 : this.defaults.indexOf(scan);
+    if (slot < 0) return code;
+    const value = this.bindings()[slot];
+    return (value < 0x8000 && this.codeOf.get(value)) || code;
+  }
+
   set(slot, value) {
     this.setDword(this.regPath, String(slot), value);
   }

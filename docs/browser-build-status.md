@@ -598,6 +598,7 @@ The change was requested because Ctrl and Alt clash with macOS and browser short
 - **What it does.** It lists the twelve control slots. Click one, then press a key; Esc cancels. A key another action already had swaps over, and the screen says so. Default keys restores the table above.
 - **Keys it refuses.** Keys the browser version uses itself in play: M, Tab, R, T, − and =, F5/F9, Esc.
 - **How the change applies.** It writes `hklm\…\gta2\control\0-11`, the values GTA2 Manager wrote, and calls `gta2_port_reload_controls`. That export runs the game's own `get_registry_controls_498C00`, so the new key works at once, in the menu or mid-game. The registry is saved in this browser with the other settings.
+- **Controllers.** `web/gamepad.js` (PR #4) presses the default keys; the shell passes each press through `ControlsScreen.rebound`, so a rebound action stays on the same controller button. A button's release always lets go of the key its press used.
 - **Tested** in the in-app Chromium: Options opens the screen and the game keeps running; M is refused with its reason; Forward set to ↑ walks the player forward and W no longer does; Default keys restores W.
 
 ## How it is put together
