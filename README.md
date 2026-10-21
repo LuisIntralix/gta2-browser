@@ -55,6 +55,11 @@ On top of that:
 | Scoreboard / chat (multiplayer) | Tab / T |
 | View distance | − / = |
 
+A controller works too (DualSense, DualShock 4, Xbox; press a button once so the browser
+sees it): left stick or d-pad to move, R2 / L2 accelerate and brake, ✕ shoot, △ get in or
+out, □ jump / handbrake, ○ horn, L1 / R1 weapons, Create the map, Options pause. In menus ✕
+confirms and ○ goes back.
+
 You can rebind any of them in the game under Options → Controls. Screen shape, camera, HUD and
 the other options are on the [front page](https://m1stermo.github.io/gta2/#options).
 

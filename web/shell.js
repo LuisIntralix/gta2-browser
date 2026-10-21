@@ -14,6 +14,7 @@ import { Gta2Map, exportDiscovery, importDiscovery } from './map.js';
 import { hideLanding, landingProgress, showContinue, showLanding, showLeaderboard } from './landing.js';
 import { count, initStats, startPlayClock } from './stats.js';
 import { CoopChat } from './chat.js';
+import { GamepadInput } from './gamepad.js';
 import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js';
 
 const GAME_DIR = '/gta2';
@@ -376,10 +377,11 @@ function saveRegistry(Module) {
 const keyHooks = { filter: null };
 const viewKeys = { handle: null, timer: 0 };
 
+/** Wires the keyboard; returns the key handler so other inputs (the gamepad) can press keys. */
 function wireInput(Module, canvas) {
   const key = Module.cwrap('gta2_port_key', null, ['number', 'number', 'number', 'number']);
   const releaseAll = Module.cwrap('gta2_port_release_all_keys', null, []);
-  const onKey = (down) => (e) => {
+  const handleKey = (e, down) => {
     if (keyHooks.filter && keyHooks.filter(e, down)) {
       e.preventDefault();
       return;
@@ -391,11 +393,27 @@ function wireInput(Module, canvas) {
     const ch = down && e.key.length === 1 ? e.key.charCodeAt(0) : 0;
     key(map[0], map[1], down ? 1 : 0, ch);
   };
-  window.addEventListener('keydown', onKey(true));
-  window.addEventListener('keyup', onKey(false));
+  window.addEventListener('keydown', (e) => handleKey(e, true));
+  window.addEventListener('keyup', (e) => handleKey(e, false));
   window.addEventListener('blur', () => releaseAll());
   document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  return handleKey;
+}
+
+/** A key press from the gamepad, shaped like the KeyboardEvent the key hooks read. */
+function syntheticKey(code) {
+  return { code, key: '', repeat: false, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault() {} };
+}
+
+function wireGamepad(handleKey, isPlaying) {
+  const gamepad = new GamepadInput({
+    send: (code, down) => handleKey(syntheticKey(code), down),
+    isPlaying,
+    onConnect: (pad) => toast(pad.mapping === 'standard' ? 'Controller connected' : 'This controller is not supported by the browser', pad.mapping !== 'standard'),
+  });
+  gamepad.start();
+  return gamepad;
 }
 
 // Developer helpers (window.gta2.dev) for automated tests in ?devdata mode.
@@ -797,7 +815,7 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
     const restored = await storage.restoreInto(Module.FS);
     if (restored) console.log(`Restored ${restored} saved file(s)`);
     seedRegistry(Module);
-    wireInput(Module, canvas);
+    const handleKey = wireInput(Module, canvas);
     // Browsers start audio only after a user gesture (but not while the map screen pauses the game).
     let gamePaused = false;
     for (const type of ['keydown', 'pointerdown']) window.addEventListener(type, () => { if (!gamePaused) audio.resume(); }, true);
@@ -892,6 +910,8 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
       // only while playing: the game's menus take R and T as letters (the player's name)
       (!!(map.last && map.last.hasPlayer) && (radioKeys(e, down) || (!!viewKeys.handle && viewKeys.handle(e, down))));
     wireMapButtons(map);
+    window.gta2.gamepad = wireGamepad(handleKey,
+      () => !!(map.last && map.last.hasPlayer) && !map.open && !(saves && saves.open) && !(chat && chat.open));
     if (new URLSearchParams(location.search).has('devdata')) installDevHelpers(Module);
     // Developer option (?perfbeacon=PORT): every 2 s, post frame timings to a listener on this
     // computer (for comparing browsers).
