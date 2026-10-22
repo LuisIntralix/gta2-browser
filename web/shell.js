@@ -18,6 +18,7 @@ import { GamepadInput } from './gamepad.js';
 import { CoopLobby, DISTRICTS, GANGS, LocalTransport, MODES, ServerTransport, WebRtcTransport } from './net.js';
 import { LANGS, lang as currentLang, onLangChange, registerDict, setLang, t } from './strings.js';
 import { money } from './savestate.js';
+import { ensureGameLanguage, gxtLetterFor, initGameLanguage } from './gamelang.js';
 
 // The shell's own user-facing text, in the web languages (namespace shell.*).
 // Game text lives in data/*.gxt, translated by web/gxt-translations.js.
@@ -734,6 +735,10 @@ function seedRegistry(Module) {
   } catch { /* storage unavailable: defaults only */ }
   // Never persisted: the movie stays off until video playback exists.
   setDword(`${REG_ROOT}\\screen`, 'do_play_movie', 0);
+  // The web language is the single source of truth (the in-game Options screen
+  // is not involved): written after the saved settings so it always wins. The
+  // engine reads the first char of this string (text_0x14.cpp constructor).
+  setString(`${REG_ROOT}\\option`, 'language', gxtLetterFor(currentLang()));
 }
 
 function saveRegistry(Module) {
@@ -1198,6 +1203,9 @@ async function start(getFiles, { cacheAfterStart = false, coop = null, loadSlot 
     await writeFiles(Module, files);
     const restored = await storage.restoreInto(Module.FS);
     if (restored) console.log(`Restored ${restored} saved file(s)`);
+    // The game's text: data/<letter>.gxt for the web language, generated from
+    // e.gxt when the user's files do not ship it (before the engine loads it).
+    ensureGameLanguage(Module, currentLang());
     seedRegistry(Module);
     const handleKey = wireInput(Module, canvas);
     // Browsers start audio only after a user gesture (but not while the map screen pauses the game).
@@ -1408,6 +1416,8 @@ $('folder').addEventListener('change', (e) => {
   start(async () => files, { cacheAfterStart: true });
 });
 
+// A language change while the game runs switches the game's text live.
+initGameLanguage(setStatus);
 wireLangButton();
 
 const pageParams = new URLSearchParams(location.search);
